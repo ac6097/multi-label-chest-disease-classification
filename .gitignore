@@ -235,3 +235,4 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+cxr_first/
