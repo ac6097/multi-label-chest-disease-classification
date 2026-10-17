@@ -1,7 +1,7 @@
 seed: 42
 epochs: 40
-image_budget: 16  # Budget counts source images; each Study is kept intact in one batch.
-grad_accumulation: 2
+image_budget: 32  # Budget counts source images; each Study is kept intact in one batch.
+grad_accumulation: 1
 learning_rate_backbone: 0.00002
 learning_rate_head: 0.0002
 weight_decay: 0.0001
