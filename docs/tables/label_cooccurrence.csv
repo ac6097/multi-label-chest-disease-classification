@@ -1,0 +1,201 @@
+﻿split,class_i,class_i_name,class_j,class_j_name,cooccurrence_study_count
+train,1,Enlarged Cardiomediastinum,1,Enlarged Cardiomediastinum,622
+train,1,Enlarged Cardiomediastinum,2,Pneumothorax,47
+train,1,Enlarged Cardiomediastinum,3,Consolidation,38
+train,1,Enlarged Cardiomediastinum,4,Pneumonia,54
+train,1,Enlarged Cardiomediastinum,5,Edema,121
+train,1,Enlarged Cardiomediastinum,6,Cardiomegaly,144
+train,1,Enlarged Cardiomediastinum,7,Atelectasis,191
+train,1,Enlarged Cardiomediastinum,8,Lung Opacity,232
+train,1,Enlarged Cardiomediastinum,9,Pleural Effusion,223
+train,1,Enlarged Cardiomediastinum,10,No Finding,0
+train,2,Pneumothorax,1,Enlarged Cardiomediastinum,47
+train,2,Pneumothorax,2,Pneumothorax,900
+train,2,Pneumothorax,3,Consolidation,44
+train,2,Pneumothorax,4,Pneumonia,20
+train,2,Pneumothorax,5,Edema,77
+train,2,Pneumothorax,6,Cardiomegaly,156
+train,2,Pneumothorax,7,Atelectasis,245
+train,2,Pneumothorax,8,Lung Opacity,193
+train,2,Pneumothorax,9,Pleural Effusion,293
+train,2,Pneumothorax,10,No Finding,0
+train,3,Consolidation,1,Enlarged Cardiomediastinum,38
+train,3,Consolidation,2,Pneumothorax,44
+train,3,Consolidation,3,Consolidation,942
+train,3,Consolidation,4,Pneumonia,202
+train,3,Consolidation,5,Edema,236
+train,3,Consolidation,6,Cardiomegaly,234
+train,3,Consolidation,7,Atelectasis,205
+train,3,Consolidation,8,Lung Opacity,242
+train,3,Consolidation,9,Pleural Effusion,508
+train,3,Consolidation,10,No Finding,0
+train,4,Pneumonia,1,Enlarged Cardiomediastinum,54
+train,4,Pneumonia,2,Pneumothorax,20
+train,4,Pneumonia,3,Consolidation,202
+train,4,Pneumonia,4,Pneumonia,1436
+train,4,Pneumonia,5,Edema,281
+train,4,Pneumonia,6,Cardiomegaly,278
+train,4,Pneumonia,7,Atelectasis,305
+train,4,Pneumonia,8,Lung Opacity,716
+train,4,Pneumonia,9,Pleural Effusion,443
+train,4,Pneumonia,10,No Finding,0
+train,5,Edema,1,Enlarged Cardiomediastinum,121
+train,5,Edema,2,Pneumothorax,77
+train,5,Edema,3,Consolidation,236
+train,5,Edema,4,Pneumonia,281
+train,5,Edema,5,Edema,2404
+train,5,Edema,6,Cardiomegaly,969
+train,5,Edema,7,Atelectasis,606
+train,5,Edema,8,Lung Opacity,704
+train,5,Edema,9,Pleural Effusion,1257
+train,5,Edema,10,No Finding,0
+train,6,Cardiomegaly,1,Enlarged Cardiomediastinum,144
+train,6,Cardiomegaly,2,Pneumothorax,156
+train,6,Cardiomegaly,3,Consolidation,234
+train,6,Cardiomegaly,4,Pneumonia,278
+train,6,Cardiomegaly,5,Edema,969
+train,6,Cardiomegaly,6,Cardiomegaly,3885
+train,6,Cardiomegaly,7,Atelectasis,1238
+train,6,Cardiomegaly,8,Lung Opacity,1005
+train,6,Cardiomegaly,9,Pleural Effusion,1501
+train,6,Cardiomegaly,10,No Finding,0
+train,7,Atelectasis,1,Enlarged Cardiomediastinum,191
+train,7,Atelectasis,2,Pneumothorax,245
+train,7,Atelectasis,3,Consolidation,205
+train,7,Atelectasis,4,Pneumonia,305
+train,7,Atelectasis,5,Edema,606
+train,7,Atelectasis,6,Cardiomegaly,1238
+train,7,Atelectasis,7,Atelectasis,3968
+train,7,Atelectasis,8,Lung Opacity,1224
+train,7,Atelectasis,9,Pleural Effusion,1926
+train,7,Atelectasis,10,No Finding,0
+train,8,Lung Opacity,1,Enlarged Cardiomediastinum,232
+train,8,Lung Opacity,2,Pneumothorax,193
+train,8,Lung Opacity,3,Consolidation,242
+train,8,Lung Opacity,4,Pneumonia,716
+train,8,Lung Opacity,5,Edema,704
+train,8,Lung Opacity,6,Cardiomegaly,1005
+train,8,Lung Opacity,7,Atelectasis,1224
+train,8,Lung Opacity,8,Lung Opacity,4508
+train,8,Lung Opacity,9,Pleural Effusion,1513
+train,8,Lung Opacity,10,No Finding,0
+train,9,Pleural Effusion,1,Enlarged Cardiomediastinum,223
+train,9,Pleural Effusion,2,Pneumothorax,293
+train,9,Pleural Effusion,3,Consolidation,508
+train,9,Pleural Effusion,4,Pneumonia,443
+train,9,Pleural Effusion,5,Edema,1257
+train,9,Pleural Effusion,6,Cardiomegaly,1501
+train,9,Pleural Effusion,7,Atelectasis,1926
+train,9,Pleural Effusion,8,Lung Opacity,1513
+train,9,Pleural Effusion,9,Pleural Effusion,4654
+train,9,Pleural Effusion,10,No Finding,0
+train,10,No Finding,1,Enlarged Cardiomediastinum,0
+train,10,No Finding,2,Pneumothorax,0
+train,10,No Finding,3,Consolidation,0
+train,10,No Finding,4,Pneumonia,0
+train,10,No Finding,5,Edema,0
+train,10,No Finding,6,Cardiomegaly,0
+train,10,No Finding,7,Atelectasis,0
+train,10,No Finding,8,Lung Opacity,0
+train,10,No Finding,9,Pleural Effusion,0
+train,10,No Finding,10,No Finding,6683
+valid,1,Enlarged Cardiomediastinum,1,Enlarged Cardiomediastinum,24
+valid,1,Enlarged Cardiomediastinum,2,Pneumothorax,1
+valid,1,Enlarged Cardiomediastinum,3,Consolidation,3
+valid,1,Enlarged Cardiomediastinum,4,Pneumonia,5
+valid,1,Enlarged Cardiomediastinum,5,Edema,3
+valid,1,Enlarged Cardiomediastinum,6,Cardiomegaly,4
+valid,1,Enlarged Cardiomediastinum,7,Atelectasis,15
+valid,1,Enlarged Cardiomediastinum,8,Lung Opacity,10
+valid,1,Enlarged Cardiomediastinum,9,Pleural Effusion,8
+valid,1,Enlarged Cardiomediastinum,10,No Finding,0
+valid,2,Pneumothorax,1,Enlarged Cardiomediastinum,1
+valid,2,Pneumothorax,2,Pneumothorax,37
+valid,2,Pneumothorax,3,Consolidation,1
+valid,2,Pneumothorax,4,Pneumonia,0
+valid,2,Pneumothorax,5,Edema,0
+valid,2,Pneumothorax,6,Cardiomegaly,4
+valid,2,Pneumothorax,7,Atelectasis,16
+valid,2,Pneumothorax,8,Lung Opacity,7
+valid,2,Pneumothorax,9,Pleural Effusion,16
+valid,2,Pneumothorax,10,No Finding,0
+valid,3,Consolidation,1,Enlarged Cardiomediastinum,3
+valid,3,Consolidation,2,Pneumothorax,1
+valid,3,Consolidation,3,Consolidation,46
+valid,3,Consolidation,4,Pneumonia,10
+valid,3,Consolidation,5,Edema,11
+valid,3,Consolidation,6,Cardiomegaly,12
+valid,3,Consolidation,7,Atelectasis,12
+valid,3,Consolidation,8,Lung Opacity,11
+valid,3,Consolidation,9,Pleural Effusion,26
+valid,3,Consolidation,10,No Finding,0
+valid,4,Pneumonia,1,Enlarged Cardiomediastinum,5
+valid,4,Pneumonia,2,Pneumothorax,0
+valid,4,Pneumonia,3,Consolidation,10
+valid,4,Pneumonia,4,Pneumonia,68
+valid,4,Pneumonia,5,Edema,11
+valid,4,Pneumonia,6,Cardiomegaly,12
+valid,4,Pneumonia,7,Atelectasis,11
+valid,4,Pneumonia,8,Lung Opacity,36
+valid,4,Pneumonia,9,Pleural Effusion,23
+valid,4,Pneumonia,10,No Finding,0
+valid,5,Edema,1,Enlarged Cardiomediastinum,3
+valid,5,Edema,2,Pneumothorax,0
+valid,5,Edema,3,Consolidation,11
+valid,5,Edema,4,Pneumonia,11
+valid,5,Edema,5,Edema,115
+valid,5,Edema,6,Cardiomegaly,45
+valid,5,Edema,7,Atelectasis,29
+valid,5,Edema,8,Lung Opacity,30
+valid,5,Edema,9,Pleural Effusion,71
+valid,5,Edema,10,No Finding,0
+valid,6,Cardiomegaly,1,Enlarged Cardiomediastinum,4
+valid,6,Cardiomegaly,2,Pneumothorax,4
+valid,6,Cardiomegaly,3,Consolidation,12
+valid,6,Cardiomegaly,4,Pneumonia,12
+valid,6,Cardiomegaly,5,Edema,45
+valid,6,Cardiomegaly,6,Cardiomegaly,177
+valid,6,Cardiomegaly,7,Atelectasis,65
+valid,6,Cardiomegaly,8,Lung Opacity,51
+valid,6,Cardiomegaly,9,Pleural Effusion,86
+valid,6,Cardiomegaly,10,No Finding,0
+valid,7,Atelectasis,1,Enlarged Cardiomediastinum,15
+valid,7,Atelectasis,2,Pneumothorax,16
+valid,7,Atelectasis,3,Consolidation,12
+valid,7,Atelectasis,4,Pneumonia,11
+valid,7,Atelectasis,5,Edema,29
+valid,7,Atelectasis,6,Cardiomegaly,65
+valid,7,Atelectasis,7,Atelectasis,193
+valid,7,Atelectasis,8,Lung Opacity,55
+valid,7,Atelectasis,9,Pleural Effusion,107
+valid,7,Atelectasis,10,No Finding,0
+valid,8,Lung Opacity,1,Enlarged Cardiomediastinum,10
+valid,8,Lung Opacity,2,Pneumothorax,7
+valid,8,Lung Opacity,3,Consolidation,11
+valid,8,Lung Opacity,4,Pneumonia,36
+valid,8,Lung Opacity,5,Edema,30
+valid,8,Lung Opacity,6,Cardiomegaly,51
+valid,8,Lung Opacity,7,Atelectasis,55
+valid,8,Lung Opacity,8,Lung Opacity,214
+valid,8,Lung Opacity,9,Pleural Effusion,70
+valid,8,Lung Opacity,10,No Finding,0
+valid,9,Pleural Effusion,1,Enlarged Cardiomediastinum,8
+valid,9,Pleural Effusion,2,Pneumothorax,16
+valid,9,Pleural Effusion,3,Consolidation,26
+valid,9,Pleural Effusion,4,Pneumonia,23
+valid,9,Pleural Effusion,5,Edema,71
+valid,9,Pleural Effusion,6,Cardiomegaly,86
+valid,9,Pleural Effusion,7,Atelectasis,107
+valid,9,Pleural Effusion,8,Lung Opacity,70
+valid,9,Pleural Effusion,9,Pleural Effusion,260
+valid,9,Pleural Effusion,10,No Finding,0
+valid,10,No Finding,1,Enlarged Cardiomediastinum,0
+valid,10,No Finding,2,Pneumothorax,0
+valid,10,No Finding,3,Consolidation,0
+valid,10,No Finding,4,Pneumonia,0
+valid,10,No Finding,5,Edema,0
+valid,10,No Finding,6,Cardiomegaly,0
+valid,10,No Finding,7,Atelectasis,0
+valid,10,No Finding,8,Lung Opacity,0
+valid,10,No Finding,9,Pleural Effusion,0
+valid,10,No Finding,10,No Finding,306

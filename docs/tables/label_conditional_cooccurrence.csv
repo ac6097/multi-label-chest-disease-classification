@@ -1,0 +1,201 @@
+﻿split,condition_class_i,condition_class_i_name,class_j,class_j_name,P_j_listed_given_i_listed,denominator_i_listed_studies
+train,1,Enlarged Cardiomediastinum,1,Enlarged Cardiomediastinum,1.0,622
+train,1,Enlarged Cardiomediastinum,2,Pneumothorax,0.07556270096463022,622
+train,1,Enlarged Cardiomediastinum,3,Consolidation,0.06109324758842444,622
+train,1,Enlarged Cardiomediastinum,4,Pneumonia,0.08681672025723473,622
+train,1,Enlarged Cardiomediastinum,5,Edema,0.1945337620578778,622
+train,1,Enlarged Cardiomediastinum,6,Cardiomegaly,0.2315112540192926,622
+train,1,Enlarged Cardiomediastinum,7,Atelectasis,0.3070739549839228,622
+train,1,Enlarged Cardiomediastinum,8,Lung Opacity,0.3729903536977492,622
+train,1,Enlarged Cardiomediastinum,9,Pleural Effusion,0.35852090032154343,622
+train,1,Enlarged Cardiomediastinum,10,No Finding,0.0,622
+train,2,Pneumothorax,1,Enlarged Cardiomediastinum,0.052222222222222225,900
+train,2,Pneumothorax,2,Pneumothorax,1.0,900
+train,2,Pneumothorax,3,Consolidation,0.04888888888888889,900
+train,2,Pneumothorax,4,Pneumonia,0.022222222222222223,900
+train,2,Pneumothorax,5,Edema,0.08555555555555555,900
+train,2,Pneumothorax,6,Cardiomegaly,0.17333333333333334,900
+train,2,Pneumothorax,7,Atelectasis,0.2722222222222222,900
+train,2,Pneumothorax,8,Lung Opacity,0.21444444444444444,900
+train,2,Pneumothorax,9,Pleural Effusion,0.32555555555555554,900
+train,2,Pneumothorax,10,No Finding,0.0,900
+train,3,Consolidation,1,Enlarged Cardiomediastinum,0.040339702760084924,942
+train,3,Consolidation,2,Pneumothorax,0.04670912951167728,942
+train,3,Consolidation,3,Consolidation,1.0,942
+train,3,Consolidation,4,Pneumonia,0.21443736730360935,942
+train,3,Consolidation,5,Edema,0.2505307855626327,942
+train,3,Consolidation,6,Cardiomegaly,0.2484076433121019,942
+train,3,Consolidation,7,Atelectasis,0.21762208067940553,942
+train,3,Consolidation,8,Lung Opacity,0.25690021231422505,942
+train,3,Consolidation,9,Pleural Effusion,0.5392781316348195,942
+train,3,Consolidation,10,No Finding,0.0,942
+train,4,Pneumonia,1,Enlarged Cardiomediastinum,0.037604456824512536,1436
+train,4,Pneumonia,2,Pneumothorax,0.013927576601671309,1436
+train,4,Pneumonia,3,Consolidation,0.14066852367688024,1436
+train,4,Pneumonia,4,Pneumonia,1.0,1436
+train,4,Pneumonia,5,Edema,0.19568245125348188,1436
+train,4,Pneumonia,6,Cardiomegaly,0.1935933147632312,1436
+train,4,Pneumonia,7,Atelectasis,0.21239554317548748,1436
+train,4,Pneumonia,8,Lung Opacity,0.4986072423398329,1436
+train,4,Pneumonia,9,Pleural Effusion,0.3084958217270195,1436
+train,4,Pneumonia,10,No Finding,0.0,1436
+train,5,Edema,1,Enlarged Cardiomediastinum,0.05033277870216306,2404
+train,5,Edema,2,Pneumothorax,0.032029950083194675,2404
+train,5,Edema,3,Consolidation,0.09816971713810316,2404
+train,5,Edema,4,Pneumonia,0.11688851913477537,2404
+train,5,Edema,5,Edema,1.0,2404
+train,5,Edema,6,Cardiomegaly,0.4030782029950083,2404
+train,5,Edema,7,Atelectasis,0.25207986688851913,2404
+train,5,Edema,8,Lung Opacity,0.2928452579034942,2404
+train,5,Edema,9,Pleural Effusion,0.5228785357737105,2404
+train,5,Edema,10,No Finding,0.0,2404
+train,6,Cardiomegaly,1,Enlarged Cardiomediastinum,0.037065637065637064,3885
+train,6,Cardiomegaly,2,Pneumothorax,0.040154440154440155,3885
+train,6,Cardiomegaly,3,Consolidation,0.06023166023166023,3885
+train,6,Cardiomegaly,4,Pneumonia,0.07155727155727155,3885
+train,6,Cardiomegaly,5,Edema,0.2494208494208494,3885
+train,6,Cardiomegaly,6,Cardiomegaly,1.0,3885
+train,6,Cardiomegaly,7,Atelectasis,0.31866151866151865,3885
+train,6,Cardiomegaly,8,Lung Opacity,0.25868725868725867,3885
+train,6,Cardiomegaly,9,Pleural Effusion,0.38635778635778634,3885
+train,6,Cardiomegaly,10,No Finding,0.0,3885
+train,7,Atelectasis,1,Enlarged Cardiomediastinum,0.04813508064516129,3968
+train,7,Atelectasis,2,Pneumothorax,0.061743951612903226,3968
+train,7,Atelectasis,3,Consolidation,0.051663306451612906,3968
+train,7,Atelectasis,4,Pneumonia,0.0768649193548387,3968
+train,7,Atelectasis,5,Edema,0.15272177419354838,3968
+train,7,Atelectasis,6,Cardiomegaly,0.3119959677419355,3968
+train,7,Atelectasis,7,Atelectasis,1.0,3968
+train,7,Atelectasis,8,Lung Opacity,0.3084677419354839,3968
+train,7,Atelectasis,9,Pleural Effusion,0.48538306451612906,3968
+train,7,Atelectasis,10,No Finding,0.0,3968
+train,8,Lung Opacity,1,Enlarged Cardiomediastinum,0.05146406388642413,4508
+train,8,Lung Opacity,2,Pneumothorax,0.04281277728482697,4508
+train,8,Lung Opacity,3,Consolidation,0.05368234250221828,4508
+train,8,Lung Opacity,4,Pneumonia,0.15882874889086068,4508
+train,8,Lung Opacity,5,Edema,0.15616681455190773,4508
+train,8,Lung Opacity,6,Cardiomegaly,0.22293700088731144,4508
+train,8,Lung Opacity,7,Atelectasis,0.27151730257320317,4508
+train,8,Lung Opacity,8,Lung Opacity,1.0,4508
+train,8,Lung Opacity,9,Pleural Effusion,0.3356255545696539,4508
+train,8,Lung Opacity,10,No Finding,0.0,4508
+train,9,Pleural Effusion,1,Enlarged Cardiomediastinum,0.04791577137945853,4654
+train,9,Pleural Effusion,2,Pneumothorax,0.06295659647614955,4654
+train,9,Pleural Effusion,3,Consolidation,0.10915341641598625,4654
+train,9,Pleural Effusion,4,Pneumonia,0.09518693596905888,4654
+train,9,Pleural Effusion,5,Edema,0.27009024495058015,4654
+train,9,Pleural Effusion,6,Cardiomegaly,0.322518263859046,4654
+train,9,Pleural Effusion,7,Atelectasis,0.41383755908895575,4654
+train,9,Pleural Effusion,8,Lung Opacity,0.3250966910184787,4654
+train,9,Pleural Effusion,9,Pleural Effusion,1.0,4654
+train,9,Pleural Effusion,10,No Finding,0.0,4654
+train,10,No Finding,1,Enlarged Cardiomediastinum,0.0,6683
+train,10,No Finding,2,Pneumothorax,0.0,6683
+train,10,No Finding,3,Consolidation,0.0,6683
+train,10,No Finding,4,Pneumonia,0.0,6683
+train,10,No Finding,5,Edema,0.0,6683
+train,10,No Finding,6,Cardiomegaly,0.0,6683
+train,10,No Finding,7,Atelectasis,0.0,6683
+train,10,No Finding,8,Lung Opacity,0.0,6683
+train,10,No Finding,9,Pleural Effusion,0.0,6683
+train,10,No Finding,10,No Finding,1.0,6683
+valid,1,Enlarged Cardiomediastinum,1,Enlarged Cardiomediastinum,1.0,24
+valid,1,Enlarged Cardiomediastinum,2,Pneumothorax,0.041666666666666664,24
+valid,1,Enlarged Cardiomediastinum,3,Consolidation,0.125,24
+valid,1,Enlarged Cardiomediastinum,4,Pneumonia,0.20833333333333334,24
+valid,1,Enlarged Cardiomediastinum,5,Edema,0.125,24
+valid,1,Enlarged Cardiomediastinum,6,Cardiomegaly,0.16666666666666666,24
+valid,1,Enlarged Cardiomediastinum,7,Atelectasis,0.625,24
+valid,1,Enlarged Cardiomediastinum,8,Lung Opacity,0.4166666666666667,24
+valid,1,Enlarged Cardiomediastinum,9,Pleural Effusion,0.3333333333333333,24
+valid,1,Enlarged Cardiomediastinum,10,No Finding,0.0,24
+valid,2,Pneumothorax,1,Enlarged Cardiomediastinum,0.02702702702702703,37
+valid,2,Pneumothorax,2,Pneumothorax,1.0,37
+valid,2,Pneumothorax,3,Consolidation,0.02702702702702703,37
+valid,2,Pneumothorax,4,Pneumonia,0.0,37
+valid,2,Pneumothorax,5,Edema,0.0,37
+valid,2,Pneumothorax,6,Cardiomegaly,0.10810810810810811,37
+valid,2,Pneumothorax,7,Atelectasis,0.43243243243243246,37
+valid,2,Pneumothorax,8,Lung Opacity,0.1891891891891892,37
+valid,2,Pneumothorax,9,Pleural Effusion,0.43243243243243246,37
+valid,2,Pneumothorax,10,No Finding,0.0,37
+valid,3,Consolidation,1,Enlarged Cardiomediastinum,0.06521739130434782,46
+valid,3,Consolidation,2,Pneumothorax,0.021739130434782608,46
+valid,3,Consolidation,3,Consolidation,1.0,46
+valid,3,Consolidation,4,Pneumonia,0.21739130434782608,46
+valid,3,Consolidation,5,Edema,0.2391304347826087,46
+valid,3,Consolidation,6,Cardiomegaly,0.2608695652173913,46
+valid,3,Consolidation,7,Atelectasis,0.2608695652173913,46
+valid,3,Consolidation,8,Lung Opacity,0.2391304347826087,46
+valid,3,Consolidation,9,Pleural Effusion,0.5652173913043478,46
+valid,3,Consolidation,10,No Finding,0.0,46
+valid,4,Pneumonia,1,Enlarged Cardiomediastinum,0.07352941176470588,68
+valid,4,Pneumonia,2,Pneumothorax,0.0,68
+valid,4,Pneumonia,3,Consolidation,0.14705882352941177,68
+valid,4,Pneumonia,4,Pneumonia,1.0,68
+valid,4,Pneumonia,5,Edema,0.16176470588235295,68
+valid,4,Pneumonia,6,Cardiomegaly,0.17647058823529413,68
+valid,4,Pneumonia,7,Atelectasis,0.16176470588235295,68
+valid,4,Pneumonia,8,Lung Opacity,0.5294117647058824,68
+valid,4,Pneumonia,9,Pleural Effusion,0.3382352941176471,68
+valid,4,Pneumonia,10,No Finding,0.0,68
+valid,5,Edema,1,Enlarged Cardiomediastinum,0.02608695652173913,115
+valid,5,Edema,2,Pneumothorax,0.0,115
+valid,5,Edema,3,Consolidation,0.09565217391304348,115
+valid,5,Edema,4,Pneumonia,0.09565217391304348,115
+valid,5,Edema,5,Edema,1.0,115
+valid,5,Edema,6,Cardiomegaly,0.391304347826087,115
+valid,5,Edema,7,Atelectasis,0.25217391304347825,115
+valid,5,Edema,8,Lung Opacity,0.2608695652173913,115
+valid,5,Edema,9,Pleural Effusion,0.6173913043478261,115
+valid,5,Edema,10,No Finding,0.0,115
+valid,6,Cardiomegaly,1,Enlarged Cardiomediastinum,0.022598870056497175,177
+valid,6,Cardiomegaly,2,Pneumothorax,0.022598870056497175,177
+valid,6,Cardiomegaly,3,Consolidation,0.06779661016949153,177
+valid,6,Cardiomegaly,4,Pneumonia,0.06779661016949153,177
+valid,6,Cardiomegaly,5,Edema,0.2542372881355932,177
+valid,6,Cardiomegaly,6,Cardiomegaly,1.0,177
+valid,6,Cardiomegaly,7,Atelectasis,0.3672316384180791,177
+valid,6,Cardiomegaly,8,Lung Opacity,0.288135593220339,177
+valid,6,Cardiomegaly,9,Pleural Effusion,0.4858757062146893,177
+valid,6,Cardiomegaly,10,No Finding,0.0,177
+valid,7,Atelectasis,1,Enlarged Cardiomediastinum,0.07772020725388601,193
+valid,7,Atelectasis,2,Pneumothorax,0.08290155440414508,193
+valid,7,Atelectasis,3,Consolidation,0.06217616580310881,193
+valid,7,Atelectasis,4,Pneumonia,0.05699481865284974,193
+valid,7,Atelectasis,5,Edema,0.15025906735751296,193
+valid,7,Atelectasis,6,Cardiomegaly,0.33678756476683935,193
+valid,7,Atelectasis,7,Atelectasis,1.0,193
+valid,7,Atelectasis,8,Lung Opacity,0.2849740932642487,193
+valid,7,Atelectasis,9,Pleural Effusion,0.5544041450777202,193
+valid,7,Atelectasis,10,No Finding,0.0,193
+valid,8,Lung Opacity,1,Enlarged Cardiomediastinum,0.04672897196261682,214
+valid,8,Lung Opacity,2,Pneumothorax,0.03271028037383177,214
+valid,8,Lung Opacity,3,Consolidation,0.0514018691588785,214
+valid,8,Lung Opacity,4,Pneumonia,0.16822429906542055,214
+valid,8,Lung Opacity,5,Edema,0.14018691588785046,214
+valid,8,Lung Opacity,6,Cardiomegaly,0.2383177570093458,214
+valid,8,Lung Opacity,7,Atelectasis,0.2570093457943925,214
+valid,8,Lung Opacity,8,Lung Opacity,1.0,214
+valid,8,Lung Opacity,9,Pleural Effusion,0.32710280373831774,214
+valid,8,Lung Opacity,10,No Finding,0.0,214
+valid,9,Pleural Effusion,1,Enlarged Cardiomediastinum,0.03076923076923077,260
+valid,9,Pleural Effusion,2,Pneumothorax,0.06153846153846154,260
+valid,9,Pleural Effusion,3,Consolidation,0.1,260
+valid,9,Pleural Effusion,4,Pneumonia,0.08846153846153847,260
+valid,9,Pleural Effusion,5,Edema,0.27307692307692305,260
+valid,9,Pleural Effusion,6,Cardiomegaly,0.33076923076923076,260
+valid,9,Pleural Effusion,7,Atelectasis,0.4115384615384615,260
+valid,9,Pleural Effusion,8,Lung Opacity,0.2692307692307692,260
+valid,9,Pleural Effusion,9,Pleural Effusion,1.0,260
+valid,9,Pleural Effusion,10,No Finding,0.0,260
+valid,10,No Finding,1,Enlarged Cardiomediastinum,0.0,306
+valid,10,No Finding,2,Pneumothorax,0.0,306
+valid,10,No Finding,3,Consolidation,0.0,306
+valid,10,No Finding,4,Pneumonia,0.0,306
+valid,10,No Finding,5,Edema,0.0,306
+valid,10,No Finding,6,Cardiomegaly,0.0,306
+valid,10,No Finding,7,Atelectasis,0.0,306
+valid,10,No Finding,8,Lung Opacity,0.0,306
+valid,10,No Finding,9,Pleural Effusion,0.0,306
+valid,10,No Finding,10,No Finding,1.0,306

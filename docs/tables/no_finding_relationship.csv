@@ -1,0 +1,3 @@
+﻿split,study_count,no_finding_listed,no_finding_and_any_disease_listed,no_finding_only_listed,neither_no_finding_nor_disease_listed,note
+train,18513,6683,0,6683,0,共现数按显式阳性ID统计；train/valid未列出类别按用户确认规则为阴性；No Finding与病种共现是否矛盾仍待定义
+valid,859,306,0,306,0,共现数按显式阳性ID统计；train/valid未列出类别按用户确认规则为阴性；No Finding与病种共现是否矛盾仍待定义

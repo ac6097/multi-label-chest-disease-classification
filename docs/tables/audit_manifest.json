@@ -1,0 +1,183 @@
+{
+  "generated_at_utc": "2026-10-16T14:55:39.637687+00:00",
+  "data_root": "D:\\multi-label-chest-disease-classification\\cxr_first",
+  "output_root": "D:\\multi-label-chest-disease-classification\\docs",
+  "source_csv_sha256": {
+    "train.csv": "3a07b4bb5c81758718d4ccb69885c9160103aeb55ab8206c71fef152de334f17",
+    "valid.csv": "7e1930138718eee4595f48820c26b69d95fb021bc9d48b46006c0aacd2415df6",
+    "test.csv": "63e107d840cbf27aee7c1c0ced1157aef454baa1141fdc3851e6c3011471529e"
+  },
+  "source_file_count": 33987,
+  "source_file_type_counts": {
+    ".csv": 3,
+    ".jpg": 33984
+  },
+  "split_counts": [
+    {
+      "split": "train",
+      "subject_count": 11055,
+      "study_count_composite_key": 18513,
+      "image_rows": 30344,
+      "images_per_study_mean": 1.6390644412034787,
+      "images_per_study_median": 2.0,
+      "images_per_study_max": 7,
+      "single_image_studies": 8507,
+      "two_image_studies": 8369,
+      "three_plus_image_studies": 1637,
+      "subjects_with_study_count_mean": 1.6746268656716419,
+      "subjects_with_study_count_median": 1.0,
+      "subjects_with_study_count_max": 21
+    },
+    {
+      "split": "valid",
+      "subject_count": 228,
+      "study_count_composite_key": 859,
+      "image_rows": 1422,
+      "images_per_study_mean": 1.6554132712456344,
+      "images_per_study_median": 2.0,
+      "images_per_study_max": 4,
+      "single_image_studies": 391,
+      "two_image_studies": 380,
+      "three_plus_image_studies": 88,
+      "subjects_with_study_count_mean": 3.767543859649123,
+      "subjects_with_study_count_median": 1.0,
+      "subjects_with_study_count_max": 89
+    },
+    {
+      "split": "test",
+      "subject_count": 136,
+      "study_count_composite_key": 1414,
+      "image_rows": 2218,
+      "images_per_study_mean": 1.5685997171145687,
+      "images_per_study_median": 1.0,
+      "images_per_study_max": 5,
+      "single_image_studies": 775,
+      "two_image_studies": 496,
+      "three_plus_image_studies": 143,
+      "subjects_with_study_count_mean": 10.397058823529411,
+      "subjects_with_study_count_median": 6.0,
+      "subjects_with_study_count_max": 62
+    }
+  ],
+  "image_audit": {
+    "image_paths_seen": 33984,
+    "readable_images": 33984,
+    "unreadable_images": 0,
+    "format_counts": {
+      "JPEG": 33984
+    },
+    "mode_counts": {
+      "L": 33984
+    },
+    "channel_type_counts": {
+      "灰度模式": 33984
+    },
+    "unique_dimension_count": 3563,
+    "width_min_median_max": [
+      1067,
+      2544.0,
+      4280
+    ],
+    "height_min_median_max": [
+      1409,
+      3019.0,
+      4280
+    ],
+    "aspect_ratio_min_median_max": [
+      0.5341246290801187,
+      0.8324607329842932,
+      1.6805797101449276
+    ],
+    "exact_file_duplicate_groups": 14,
+    "decoded_pixel_duplicate_groups": null,
+    "scan_seconds": "reused cache"
+  },
+  "study_id_is_globally_unique_across_subjects": true,
+  "study_ids_used_by_multiple_subjects": {},
+  "study_ids_global_count": 20786,
+  "subject_study_pair_global_count": 20786,
+  "subjects_shared_between_splits": [],
+  "csv_image_path_missing_count": 0,
+  "unreferenced_image_count": 0,
+  "duplicate_csv_image_id_count": 0,
+  "image_reference_count": 33984,
+  "exact_duplicate_group_count": 14,
+  "exact_duplicate_image_count": 28,
+  "exact_duplicate_cross_split_group_count": 0,
+  "exact_duplicate_cross_study_group_count": 0,
+  "metadata_fields": {
+    "train": [
+      "Dicom_id",
+      "Subject_id",
+      "Study_id",
+      "ViewPosition",
+      "PatientOrientation",
+      "Rows",
+      "Columns",
+      "Predict_class"
+    ],
+    "valid": [
+      "Dicom_id",
+      "Subject_id",
+      "Study_id",
+      "ViewPosition",
+      "PatientOrientation",
+      "Rows",
+      "Columns",
+      "Predict_class"
+    ],
+    "test": [
+      "Dicom_id",
+      "Subject_id",
+      "Study_id",
+      "ViewPosition",
+      "PatientOrientation",
+      "Rows",
+      "Columns"
+    ]
+  },
+  "view_field_value_counts": {
+    "train": {
+      "AP": 12152,
+      "PA": 7604,
+      "LATERAL": 6554,
+      "LL": 2831,
+      "": 1202,
+      "PA LLD": 1
+    },
+    "valid": {
+      "AP": 584,
+      "PA": 364,
+      "LATERAL": 284,
+      "LL": 151,
+      "": 39
+    },
+    "test": {
+      "AP": 1090,
+      "PA": 402,
+      "LATERAL": 370,
+      "LL": 217,
+      "": 139
+    }
+  },
+  "patient_orientation_value_counts": {
+    "train": {
+      "Erect": 23651,
+      "Recumbent": 3386,
+      "": 3307
+    },
+    "valid": {
+      "Erect": 1088,
+      "Recumbent": 199,
+      "": 135
+    },
+    "test": {
+      "Erect": 1587,
+      "": 369,
+      "Recumbent": 262
+    }
+  },
+  "label_encoding": "Predict_class is a semicolon-delimited list of integer class IDs; no explicit negative/unknown state found in source files.",
+  "label_to_name_mapping_source": "User-provided ordered class list mapped to official IDs 1-10; no mapping legend found in cxr_first.",
+  "training_validation_label_semantics": "closed_world: user confirmed omitted IDs in valid train/valid Predict_class lists are negative; test labels are not used."
+}

@@ -1,0 +1,26 @@
+﻿split,field,value,image_count
+train,ViewPosition,AP,12152
+train,ViewPosition,PA,7604
+train,ViewPosition,LATERAL,6554
+train,ViewPosition,LL,2831
+train,ViewPosition,[空值],1202
+train,ViewPosition,PA LLD,1
+train,PatientOrientation,Erect,23651
+train,PatientOrientation,Recumbent,3386
+train,PatientOrientation,[空值],3307
+valid,ViewPosition,AP,584
+valid,ViewPosition,PA,364
+valid,ViewPosition,LATERAL,284
+valid,ViewPosition,LL,151
+valid,ViewPosition,[空值],39
+valid,PatientOrientation,Erect,1088
+valid,PatientOrientation,Recumbent,199
+valid,PatientOrientation,[空值],135
+test,ViewPosition,AP,1090
+test,ViewPosition,PA,402
+test,ViewPosition,LATERAL,370
+test,ViewPosition,LL,217
+test,ViewPosition,[空值],139
+test,PatientOrientation,Erect,1587
+test,PatientOrientation,[空值],369
+test,PatientOrientation,Recumbent,262

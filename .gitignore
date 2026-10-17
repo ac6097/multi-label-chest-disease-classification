@@ -3,6 +3,23 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Dataset files, trained weights, and generated experiment artifacts
+**/data/raw/images/*
+!**/data/raw/images/.gitkeep
+**/data/raw/labels/*
+!**/data/raw/labels/.gitkeep
+**/data/processed/**
+!**/data/processed/**/.gitkeep
+**/data/splits/**
+!**/data/splits/**/.gitkeep
+**/checkpoint/**/*.pth
+**/checkpoint/**/*.pt
+**/checkpoint/**/*.ckpt
+**/outputs/**/*.csv
+**/outputs/**/*.png
+**/outputs/**/*.jpg
+**/outputs/**/*.json
+
 # C extensions
 *.so
 

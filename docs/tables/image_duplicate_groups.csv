@@ -1,0 +1,15 @@
+﻿duplicate_type,group_id,count,paths
+文件字节 SHA-256,1,2,train/subject_00122/study_13719/pic_022611.jpg | train/subject_00122/study_13719/pic_022613.jpg
+文件字节 SHA-256,2,2,train/subject_00876/study_09506/pic_015626.jpg | train/subject_00876/study_09506/pic_015629.jpg
+文件字节 SHA-256,3,2,train/subject_00876/study_09506/pic_015627.jpg | train/subject_00876/study_09506/pic_015628.jpg
+文件字节 SHA-256,4,2,train/subject_01857/study_01995/pic_003255.jpg | train/subject_01857/study_01995/pic_003256.jpg
+文件字节 SHA-256,5,2,train/subject_02413/study_02652/pic_004342.jpg | train/subject_02413/study_02652/pic_004343.jpg
+文件字节 SHA-256,6,2,train/subject_05061/study_12540/pic_020655.jpg | train/subject_05061/study_12540/pic_020656.jpg
+文件字节 SHA-256,7,2,train/subject_05061/study_12540/pic_020657.jpg | train/subject_05061/study_12540/pic_020658.jpg
+文件字节 SHA-256,8,2,train/subject_07577/study_10687/pic_017549.jpg | train/subject_07577/study_10687/pic_017552.jpg
+文件字节 SHA-256,9,2,train/subject_07577/study_10687/pic_017550.jpg | train/subject_07577/study_10687/pic_017551.jpg
+文件字节 SHA-256,10,2,train/subject_08483/study_12442/pic_020487.jpg | train/subject_08483/study_12442/pic_020488.jpg
+文件字节 SHA-256,11,2,train/subject_08483/study_12442/pic_020489.jpg | train/subject_08483/study_12442/pic_020492.jpg
+文件字节 SHA-256,12,2,train/subject_08483/study_12442/pic_020490.jpg | train/subject_08483/study_12442/pic_020491.jpg
+文件字节 SHA-256,13,2,train/subject_08483/study_14661/pic_024191.jpg | train/subject_08483/study_14661/pic_024192.jpg
+文件字节 SHA-256,14,2,train/subject_10387/study_16588/pic_027376.jpg | train/subject_10387/study_16588/pic_027377.jpg

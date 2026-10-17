@@ -1,0 +1,144 @@
+一、推荐的整体目录结构
+ChestXrayClassification/
+│
+├── DenseNet121/
+│
+├── ConvNeXtTiny/
+│
+└── README.md
+
+两个文件夹的内部结构基本一致。
+
+二、DenseNet-121 工程结构
+
+DenseNet121/
+│
+├── data/                       # 数据集相关
+│   ├── raw/                    # 原始数据集
+│   │   ├── images/
+│   │   └── labels/
+│   ├── processed/              # 预处理后的数据
+│   └── splits/                 # 训练/验证集划分索引
+│
+├── model/                      # 模型网络结构
+│   ├── __init__.py
+│   ├── backbone.py             # DenseNet-121骨干网络
+│   ├── classifier.py           # 十标签分类头
+│   └── network.py              # 组合完整模型
+│
+├── checkpoint/                 # 模型权重
+│   ├── pretrained/             # ImageNet预训练权重
+│   ├── best/                   # 验证集最优权重
+│   └── last/                   # 最新训练权重
+│
+├── configs/                    # 配置文件
+│   ├── model.yaml              # 网络结构参数
+│   ├── train.yaml              # 训练超参数
+│   └── data.yaml               # 数据路径与预处理配置
+│
+├── datasets/                   # 数据读取与预处理代码
+│   ├── __init__.py
+│   ├── dataset.py              # PyTorch Dataset
+│   ├── transforms.py           # 数据增强与预处理
+│   └── analysis.py             # 数据统计分析
+│
+├── engine/                     # 训练核心逻辑
+│   ├── __init__.py
+│   ├── trainer.py              # 模型训练循环
+│   ├── validator.py            # 验证流程
+│   └── losses.py               # Weighted BCE损失函数
+│
+├── utils/                      # 通用工具
+│   ├── __init__.py
+│   ├── metrics.py              # AUROC、AUPRC等指标
+│   ├── logger.py               # 日志记录
+│   ├── seed.py                 # 随机种子
+│   └── checkpoint.py           # 权重保存与加载
+│
+├── outputs/                    # 实验输出
+│   ├── logs/                   # 训练日志
+│   ├── figures/                # Loss/AUC曲线
+│   ├── predictions/            # 验证集预测结果
+│   ├── gradcam/                # Grad-CAM可视化
+│   └── reports/                # 数据分析与实验报告
+│
+├── train.py                    # 训练入口
+├── evaluate.py                 # 模型评估入口
+├── predict.py                  # 测试集推理入口
+├── requirements.txt            # Python依赖
+└── README.md                   # 工程说明
+
+三、ConvNeXt-Tiny 工程结构
+
+ConvNeXtTiny/
+│
+├── data/
+│   ├── raw/
+│   │   ├── images/
+│   │   └── labels/
+│   ├── processed/
+│   └── splits/
+│
+├── model/
+│   ├── __init__.py
+│   ├── backbone.py             # ConvNeXt-Tiny骨干网络
+│   ├── classifier.py           # 十标签分类头
+│   └── network.py              # 组合完整模型
+│
+├── checkpoint/
+│   ├── pretrained/
+│   ├── best/
+│   └── last/
+│
+├── configs/
+│   ├── model.yaml
+│   ├── train.yaml
+│   └── data.yaml
+│
+├── datasets/
+│   ├── __init__.py
+│   ├── dataset.py
+│   ├── transforms.py
+│   └── analysis.py
+│
+├── engine/
+│   ├── __init__.py
+│   ├── trainer.py
+│   ├── validator.py
+│   └── losses.py
+│
+├── utils/
+│   ├── __init__.py
+│   ├── metrics.py
+│   ├── logger.py
+│   ├── seed.py
+│   └── checkpoint.py
+│
+├── outputs/
+│   ├── logs/
+│   ├── figures/
+│   ├── predictions/
+│   ├── gradcam/
+│   └── reports/
+│
+├── train.py
+├── evaluate.py
+├── predict.py
+├── requirements.txt
+└── README.md
+
+四、几个重要文件夹的设计说明
+文件夹	主要作用
+data/	保存数据集、标签和划分信息
+model/	定义 Backbone、分类头和完整网络结构
+checkpoint/	保存预训练权重、最优权重及断点续训权重
+configs/	统一管理超参数，不需要频繁修改代码
+datasets/	实现数据读取、预处理和增强
+engine/	实现训练、验证和损失函数
+utils/	存放指标计算、日志和通用辅助函数
+outputs/	保存训练结果、图表和预测文件
+这里重点解释两个容易混淆的目录。
+model/ 与 checkpoint/ 是不同的。
+model/ 存的是 Python 网络结构定义，例如 DenseNet-121、十分类头等。
+checkpoint/ 存的是实际训练得到的权重，包括优化器状态等可以用于恢复训练的信息。
+另外，checkpoint/best/ 建议保存验证集 Macro-AUC 最优模型，checkpoint/last/ 则保存最近训练状态。这样即使训练中断，也可以恢复，而不必重新训练。

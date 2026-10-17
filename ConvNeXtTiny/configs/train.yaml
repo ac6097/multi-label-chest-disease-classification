@@ -1,0 +1,24 @@
+seed: 42
+epochs: 40
+image_budget: 8  # Budget counts source images; each Study is kept intact in one batch.
+grad_accumulation: 4
+learning_rate_backbone: 0.00002
+learning_rate_head: 0.0002
+weight_decay: 0.01
+warmup_epochs: 2
+patience: 8
+freeze_backbone_epochs: 1
+gradient_clip_norm: 1.0
+
+# bce is the baseline; alternatives are weighted_bce or asl.
+loss: bce
+weighting: sqrt  # none | raw | sqrt | cap
+pos_weight_cap: 5.0
+gamma_pos: 0.0
+gamma_neg: 4.0
+asl_clip: 0.05
+
+amp: true
+amp_dtype: bfloat16
+output_dir: .
+resume: ""

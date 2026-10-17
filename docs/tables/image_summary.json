@@ -1,0 +1,33 @@
+{
+  "image_paths_seen": 33984,
+  "readable_images": 33984,
+  "unreadable_images": 0,
+  "format_counts": {
+    "JPEG": 33984
+  },
+  "mode_counts": {
+    "L": 33984
+  },
+  "channel_type_counts": {
+    "灰度模式": 33984
+  },
+  "unique_dimension_count": 3563,
+  "width_min_median_max": [
+    1067,
+    2544.0,
+    4280
+  ],
+  "height_min_median_max": [
+    1409,
+    3019.0,
+    4280
+  ],
+  "aspect_ratio_min_median_max": [
+    0.5341246290801187,
+    0.8324607329842932,
+    1.6805797101449276
+  ],
+  "exact_file_duplicate_groups": 14,
+  "decoded_pixel_duplicate_groups": null,
+  "scan_seconds": "reused cache"
+}

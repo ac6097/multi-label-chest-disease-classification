@@ -1,0 +1,4 @@
+﻿split,subject_count,study_count_composite_key,image_rows,images_per_study_mean,images_per_study_median,images_per_study_max,single_image_studies,two_image_studies,three_plus_image_studies,subjects_with_study_count_mean,subjects_with_study_count_median,subjects_with_study_count_max
+train,11055,18513,30344,1.6390644412034787,2.0,7,8507,8369,1637,1.6746268656716419,1.0,21
+valid,228,859,1422,1.6554132712456344,2.0,4,391,380,88,3.767543859649123,1.0,89
+test,136,1414,2218,1.5685997171145687,1.0,5,775,496,143,10.397058823529411,6.0,62

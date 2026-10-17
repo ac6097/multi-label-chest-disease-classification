@@ -1,0 +1,185 @@
+
+FILE DenseNet-121_backbone.docx
+P0 [Title]: 胸部X光多标签分类技术路线
+DenseNet-121 Backbone 方案
+P1 [Subtitle]: 赛前设计版  ·  2026年10月12日  ·  数据集计划于10月15日开放
+P2 [Normal]: 定位：作为独立基线模型，先跑通可复现的训练与评估链路；数据公布后再依据统计报告决定类别权重、Study级聚合及增强模块。
+P3 [Heading 1]: 1 任务目标与已知约束
+P4 [List Bullet]: 任务：预测10个胸片征象/疾病标签的概率，使用 Sigmoid 而非 Softmax；单次检查（Study）是提交单位。
+P5 [List Bullet]: 数据：训练18,513次检查、验证859次检查、测试1,414次检查；每个Study可能包含多张图像，尚待数据发布后确认。
+P6 [List Bullet]: 主要指标：Macro-AUROC；辅助记录每类AUROC、AUPRC、Loss与错误案例。
+P7 [List Bullet]: 开发：本地RTX 4060（按8GB显存暂定）；本地训练建议BF16 AMP，FP32权重保存。
+P8 [List Bullet]: 官方环境：T4 16GB、Python 3.12、PyTorch 2.10、torchvision 0.25、CUDA 12.8；最终推理考虑FP16/FP32，模型文件≤500MB，延迟约束按官方口径验收。
+P9 [List Bullet]: 合规前提：公开预训练权重是否允许使用，需主办方确认；Docker pull仅下载运行镜像，不代表获得官方训练GPU。
+P10 [Heading 1]: 2 Backbone结构与最小可行模型
+P11 [Normal]: 采用 torchvision DenseNet-121，ImageNet-1K预训练。Stem：7×7 Conv(stride=2)+BN+ReLU+3×3 MaxPool(stride=2)；四个Dense Block配置为(6,12,24,16)，增长率k=32；各Block之间由Transition下采样。
+P13 [Normal]: 初始模型：官方预训练features → ReLU → AdaptiveAvgPool2d(1) → Linear(1024,10)。除分类头替换外，不修改Stem和Dense Block，以保留全部可兼容预训练权重。
+P14 [Heading 1]: 3 数据公布后的第一轮数据分析（决定后续方案）
+P15 [List Bullet]: 建立subject_id / study_id / image_id索引，核对文件缺失、图像尺寸、灰度范围、PNG/JPG与视角信息。
+P16 [List Bullet]: 以Study为单位统计10类阳性、阴性、未知标签数量及比例；同时统计每个Study图像张数和视角组合。
+P17 [List Bullet]: 计算10×10标签共现矩阵，专门审计“No Finding”与其他疾病标签是否出现矛盾。
+P18 [List Bullet]: 统计训练与官方验证中的Subject重叠；内部划分验证集时按Subject分组，防止同患者图像泄漏。
+P19 [List Bullet]: 输出数据分析报告：类别分布、视角分布、样本数量、缺失/不确定标签处理建议、潜在混淆类别及初步增强策略。
+P20 [Heading 1]: 4 图像预处理与增强
+P21 [List Bullet]: 初步输入尺寸320×320；保持长宽比，等比例缩放并Padding，不随意拉伸心脏或胸廓形状。
+P22 [List Bullet]: 单通道灰度图复制成3通道，按所选预训练权重推荐的归一化口径处理；Train/Val/Test保持一致。
+P23 [List Bullet]: 训练增强：亮度和对比度各约±5%，平移≤2%，等比例缩放0.97–1.03；像素填充方式与医学背景一致。
+P24 [List Bullet]: 首轮不使用随机裁剪、水平翻转、旋转、MixUp或CutMix；必要时单独消融±3°微旋转。
+P25 [List Bullet]: 对原始图像、增强后图像进行人工抽样可视化检查，确认未裁掉胸膜角、心影或诊断有关区域。
+P26 [Heading 1]: 5 损失函数与不均衡策略
+P27 [Normal]: 首批实验以BCEWithLogitsLoss为核心。保留标准BCE作为对照，Weighted BCE为计划主实验；使用逐类pos_weight，不是简单给整类所有样本同权重。
+P28 [Normal]: 候选公式：pos_weight[c] = clip(sqrt(N_neg[c]/N_pos[c]), 1, w_max)，w_max先考虑5或10；仅对有效（非缺失/不确定）标签参与损失计算。权重上限及不确定标签策略须在数据报告后确定。
+P29 [List Bullet]: 不可根据“负样本未达到96%”排除ASL：ASL作为可选对照，而非当前必选方案。
+P30 [List Bullet]: 极少阳性、零阳性或未知标签类别不能直接使用N_neg/N_pos；须进行单独处理。
+P31 [List Bullet]: Macro-AUROC关注概率排序，重加权不保证必然改善AUC；权重效果以同验证集消融结果决定。
+P32 [Heading 1]: 6 训练超参数初稿（RTX 4060 8GB假设）
+P34 [Normal]: 可先冻结Backbone仅训练分类头1–2 Epoch，再解冻全模型；完整比较时固定划分、相同增强与训练预算。DenseNet应额外观察BN统计量在小batch下的稳定性。
+P35 [Heading 1]: 7 评估、日志与模型保存
+P36 [List Bullet]: 每Epoch：Train/Val Loss、Macro-AUROC、十类AUROC与AUPRC、学习率、梯度范数、显存峰值、耗时。
+P37 [List Bullet]: 验证集真实标签的某一类若只含单一取值，则该类AUROC不可计算：记录为NA并审查划分，而非简单补0或补1。
+P38 [List Bullet]: 保存best_by_macro_auc.pth和last.pth；另存配置JSON、类别顺序、标签映射、权重公式、划分种子与数据版本。
+P39 [List Bullet]: 保存study_id级的真实标签/预测概率表，供误差分析和后续双模型融合使用；Grad-CAM选典型错误样本定期分析。
+P40 [List Bullet]: 推理前使用Sigmoid输出概率；最终CSV列和Study排序按主办方接口定义生成。
+P41 [Heading 1]: 8 数据公布后按顺序进行的消融
+P43 [Normal]: 多尺度候选：选Dense Block2/3/4输出，分别GAP得到512/1024/1024维向量，Concat为2560维，再训练小型分类头。注意这属于“多层级池化向量融合”，不保留完整空间定位。
+P44 [Normal]: 标签注意力候选：提取尚未GAP的空间特征，转换为HW个tokens；构建10个可学习Query，d_model=256、4 heads、1层Cross-Attention、dropout=0.1。CBAM与标签注意力首先独立实验，不预设叠加必有提升。
+P45 [Heading 1]: 9 Study级多图处理：待决策分支
+P46 [List Bullet]: 若每个Study仅一图：使用标准图像级Backbone得到10个Logits，可直接映射到Study。
+P47 [List Bullet]: 若多个视角/多图：先建立图像级预测后均值/最大值概率聚合的简易基线；再比较共享Backbone的Mean/Max/Attention特征聚合。
+P48 [List Bullet]: 分组/采样和标签统计始终以Study或Subject为单位；训练中不得将同一Study图像误作不同独立检查。
+P49 [Heading 1]: 10 工程交付与风险控制
+P50 [List Bullet]: 数据公开前：完成模型初始化、合成数据前向/反向、AMP、训练配置、日志、checkpoint恢复、基础CSV推理接口。
+P51 [List Bullet]: 数据公开后：先完成数据报告，再锁定数据划分、缺失标签与Weighted BCE权重策略，再训练两条基线。
+P52 [List Bullet]: T4环境最终按FP16 AMP或FP32推理部署；测量实际单图延迟、最大显存、模型大小、输出一致性及Study聚合开销。
+P53 [List Bullet]: 确认公开ImageNet权重及外部预训练资源是否符合竞赛约束；Docker镜像只定义环境，不自动提供云端GPU。
+P54 [List Bullet]: 停止规则：只因验证结果支持才加入新模块；轻微Macro-AUC波动必须通过重复种子或置信区间复核。
+P55 [Heading 1]: 11 参考实现与论文
+P56 [List Bullet]: DenseNet论文：Huang et al., Densely Connected Convolutional Networks, CVPR 2017. https://arxiv.org/abs/1608.06993
+P57 [List Bullet]: torchvision DenseNet文档：https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.densenet121.html
+P58 [Normal]: 统一说明：本文件为赛前技术路线，不包含真实数据统计、实验成绩或保证性性能结论；2026年10月15日数据公布后更新为v1.1。
+TABLE 0
+阶段 | 224×224输入时的典型输出 | 作用
+Stem | 64×56×56 | 初始特征与下采样
+Dense Block 1 | 256×56×56 | 密集连接、特征复用
+Dense Block 2 | 512×28×28 | 中层结构特征
+Dense Block 3 | 1024×14×14 | 较深语义特征
+Dense Block 4 | 1024×7×7 | 最终语义特征
+分类头 | GAP → Linear(1024,10) | 10个Logits
+TABLE 1
+参数 | 建议起点 | 备注
+训练精度 | BF16 AMP，参数FP32 | 先检查torch.cuda.is_bf16_supported()
+输入分辨率 | 320×320 | 后续比较256/320/448
+micro-batch | 16（不足改8） | 根据显存实测
+梯度累积 | 2（batch=16） | 有效batch目标约32
+优化器 | AdamW | 支持分组学习率
+Backbone LR | 2e-5 | 全量微调阶段
+分类头 LR | 2e-4 | 随机初始化层
+Weight Decay | 1e-4 | 可调
+Warmup | 2 Epoch | 然后Cosine衰减
+训练轮数 | 上限40 Epoch | 以早停控制
+Early stopping | patience 8 | 监控Macro-AUROC
+梯度裁剪 | max_norm=1.0 | 观察梯度异常
+随机种子 | 至少3个做关键实验复核 | 非初始所有实验都重跑
+TABLE 2
+编号 | 实验内容
+E0 | 数据分析、读取接口、Study级输出与评测函数
+E1 | 原始Backbone + 标准BCE（公平对照）
+E2 | 原始Backbone + Weighted BCE（当前主方案）
+E3 | 最佳Loss + 输入分辨率比较
+E4 | 最佳Loss + 简单多尺度GAP后Concat
+E5 | 最佳Loss + CBAM（独立实验）
+E6 | 最佳Loss + 10 Query Label Cross-Attention（独立实验）
+E7 | 单模块有效时才组合CBAM + LabelAttention
+E8 | 对照另一Backbone做误差互补/概率融合
+
+FILE ConvNeXt-Tiny_backbone.docx
+P0 [Title]: 胸部X光多标签分类技术路线
+ConvNeXt-Tiny Backbone 方案
+P1 [Subtitle]: 赛前设计版  ·  2026年10月12日  ·  数据集计划于10月15日开放
+P2 [Normal]: 定位：作为独立基线模型，先跑通可复现的训练与评估链路；数据公布后再依据统计报告决定类别权重、Study级聚合及增强模块。
+P3 [Heading 1]: 1 任务目标与已知约束
+P4 [List Bullet]: 任务：预测10个胸片征象/疾病标签的概率，使用 Sigmoid 而非 Softmax；单次检查（Study）是提交单位。
+P5 [List Bullet]: 数据：训练18,513次检查、验证859次检查、测试1,414次检查；每个Study可能包含多张图像，尚待数据发布后确认。
+P6 [List Bullet]: 主要指标：Macro-AUROC；辅助记录每类AUROC、AUPRC、Loss与错误案例。
+P7 [List Bullet]: 开发：本地RTX 4060（按8GB显存暂定）；本地训练建议BF16 AMP，FP32权重保存。
+P8 [List Bullet]: 官方环境：T4 16GB、Python 3.12、PyTorch 2.10、torchvision 0.25、CUDA 12.8；最终推理考虑FP16/FP32，模型文件≤500MB，延迟约束按官方口径验收。
+P9 [List Bullet]: 合规前提：公开预训练权重是否允许使用，需主办方确认；Docker pull仅下载运行镜像，不代表获得官方训练GPU。
+P10 [Heading 1]: 2 Backbone结构与最小可行模型
+P11 [Normal]: 采用 torchvision ConvNeXt-Tiny，ImageNet-1K预训练。使用4×4 stride=4的Patchify Stem，四阶段Block数(3,3,9,3)，通道数(96,192,384,768)。每个Block由7×7 Depthwise Conv、LayerNorm、C→4C→C通道MLP、GELU和残差连接构成。
+P13 [Normal]: 初始模型：保留预训练主干和分类头前的归一化流程，仅替换最后Linear(768,1000)为Linear(768,10)。不改动原始ConvNeXt Block，优先验证其纯Backbone性能。
+P14 [Heading 1]: 3 数据公布后的第一轮数据分析（决定后续方案）
+P15 [List Bullet]: 建立subject_id / study_id / image_id索引，核对文件缺失、图像尺寸、灰度范围、PNG/JPG与视角信息。
+P16 [List Bullet]: 以Study为单位统计10类阳性、阴性、未知标签数量及比例；同时统计每个Study图像张数和视角组合。
+P17 [List Bullet]: 计算10×10标签共现矩阵，专门审计“No Finding”与其他疾病标签是否出现矛盾。
+P18 [List Bullet]: 统计训练与官方验证中的Subject重叠；内部划分验证集时按Subject分组，防止同患者图像泄漏。
+P19 [List Bullet]: 输出数据分析报告：类别分布、视角分布、样本数量、缺失/不确定标签处理建议、潜在混淆类别及初步增强策略。
+P20 [Heading 1]: 4 图像预处理与增强
+P21 [List Bullet]: 初步输入尺寸320×320；保持长宽比，等比例缩放并Padding，不随意拉伸心脏或胸廓形状。
+P22 [List Bullet]: 单通道灰度图复制成3通道，按所选预训练权重推荐的归一化口径处理；Train/Val/Test保持一致。
+P23 [List Bullet]: 训练增强：亮度和对比度各约±5%，平移≤2%，等比例缩放0.97–1.03；像素填充方式与医学背景一致。
+P24 [List Bullet]: 首轮不使用随机裁剪、水平翻转、旋转、MixUp或CutMix；必要时单独消融±3°微旋转。
+P25 [List Bullet]: 对原始图像、增强后图像进行人工抽样可视化检查，确认未裁掉胸膜角、心影或诊断有关区域。
+P26 [Heading 1]: 5 损失函数与不均衡策略
+P27 [Normal]: 首批实验以BCEWithLogitsLoss为核心。保留标准BCE作为对照，Weighted BCE为计划主实验；使用逐类pos_weight，不是简单给整类所有样本同权重。
+P28 [Normal]: 候选公式：pos_weight[c] = clip(sqrt(N_neg[c]/N_pos[c]), 1, w_max)，w_max先考虑5或10；仅对有效（非缺失/不确定）标签参与损失计算。权重上限及不确定标签策略须在数据报告后确定。
+P29 [List Bullet]: 不可根据“负样本未达到96%”排除ASL：ASL作为可选对照，而非当前必选方案。
+P30 [List Bullet]: 极少阳性、零阳性或未知标签类别不能直接使用N_neg/N_pos；须进行单独处理。
+P31 [List Bullet]: Macro-AUROC关注概率排序，重加权不保证必然改善AUC；权重效果以同验证集消融结果决定。
+P32 [Heading 1]: 6 训练超参数初稿（RTX 4060 8GB假设）
+P34 [Normal]: 可先冻结Backbone训练分类头1–2 Epoch，再解冻全模型；使用LayerNorm避免BN的batch统计依赖，但仍需关注小batch梯度噪声。
+P35 [Heading 1]: 7 评估、日志与模型保存
+P36 [List Bullet]: 每Epoch：Train/Val Loss、Macro-AUROC、十类AUROC与AUPRC、学习率、梯度范数、显存峰值、耗时。
+P37 [List Bullet]: 验证集真实标签的某一类若只含单一取值，则该类AUROC不可计算：记录为NA并审查划分，而非简单补0或补1。
+P38 [List Bullet]: 保存best_by_macro_auc.pth和last.pth；另存配置JSON、类别顺序、标签映射、权重公式、划分种子与数据版本。
+P39 [List Bullet]: 保存study_id级的真实标签/预测概率表，供误差分析和后续双模型融合使用；Grad-CAM选典型错误样本定期分析。
+P40 [List Bullet]: 推理前使用Sigmoid输出概率；最终CSV列和Study排序按主办方接口定义生成。
+P41 [Heading 1]: 8 数据公布后按顺序进行的消融
+P43 [Normal]: 多尺度候选：选Stage2/3/4输出，分别GAP得到192/384/768维向量，Concat为1344维，再训练小型分类头；训练时尽量复用中间特征，避免重复前向。
+P44 [Normal]: 标签注意力候选：提取尚未GAP的空间特征，转换为HW个tokens；构建10个可学习Query，d_model=256、4 heads、1层Cross-Attention、dropout=0.1。CBAM与标签注意力首先独立实验，不预设叠加必有提升。
+P45 [Heading 1]: 9 Study级多图处理：待决策分支
+P46 [List Bullet]: 若每个Study仅一图：使用标准图像级Backbone得到10个Logits，可直接映射到Study。
+P47 [List Bullet]: 若多个视角/多图：先建立图像级预测后均值/最大值概率聚合的简易基线；再比较共享Backbone的Mean/Max/Attention特征聚合。
+P48 [List Bullet]: 分组/采样和标签统计始终以Study或Subject为单位；训练中不得将同一Study图像误作不同独立检查。
+P49 [Heading 1]: 10 工程交付与风险控制
+P50 [List Bullet]: 数据公开前：完成模型初始化、合成数据前向/反向、AMP、训练配置、日志、checkpoint恢复、基础CSV推理接口。
+P51 [List Bullet]: 数据公开后：先完成数据报告，再锁定数据划分、缺失标签与Weighted BCE权重策略，再训练两条基线。
+P52 [List Bullet]: T4环境最终按FP16 AMP或FP32推理部署；测量实际单图延迟、最大显存、模型大小、输出一致性及Study聚合开销。
+P53 [List Bullet]: 确认公开ImageNet权重及外部预训练资源是否符合竞赛约束；Docker镜像只定义环境，不自动提供云端GPU。
+P54 [List Bullet]: 停止规则：只因验证结果支持才加入新模块；轻微Macro-AUC波动必须通过重复种子或置信区间复核。
+P55 [Heading 1]: 11 参考实现与论文
+P56 [List Bullet]: ConvNeXt论文：Liu et al., A ConvNet for the 2020s, CVPR 2022. https://arxiv.org/abs/2201.03545
+P57 [List Bullet]: torchvision ConvNeXt文档：https://docs.pytorch.org/vision/stable/models/generated/torchvision.models.convnext_tiny.html
+P58 [Normal]: 统一说明：本文件为赛前技术路线，不包含真实数据统计、实验成绩或保证性性能结论；2026年10月15日数据公布后更新为v1.1。
+TABLE 0
+阶段 | 224×224输入时的典型输出 | 作用
+Stem / Stage1 | 96×56×56（3 Blocks） | 初始空间特征
+Stage2 | 192×28×28（3 Blocks） | 中层纹理与形态
+Stage3 | 384×14×14（9 Blocks） | 主要语义表征
+Stage4 | 768×7×7（3 Blocks） | 深层语义特征
+分类头 | GAP → LN → Linear(768,10) | 10个Logits
+TABLE 1
+参数 | 建议起点 | 备注
+训练精度 | BF16 AMP，参数FP32 | 先检查torch.cuda.is_bf16_supported()
+输入分辨率 | 320×320 | 后续比较256/320/448
+micro-batch | 8（不足改4） | 根据显存实测
+梯度累积 | 4（batch=8） | 有效batch目标约32
+优化器 | AdamW | 支持分组学习率
+Backbone LR | 2e-5 | 全量微调阶段
+分类头 LR | 2e-4 | 随机初始化层
+Weight Decay | 0.01 | 可调
+Warmup | 2 Epoch | 然后Cosine衰减
+训练轮数 | 上限40 Epoch | 以早停控制
+Early stopping | patience 8 | 监控Macro-AUROC
+梯度裁剪 | max_norm=1.0 | 观察梯度异常
+随机种子 | 至少3个做关键实验复核 | 非初始所有实验都重跑
+TABLE 2
+编号 | 实验内容
+E0 | 数据分析、读取接口、Study级输出与评测函数
+E1 | 原始Backbone + 标准BCE（公平对照）
+E2 | 原始Backbone + Weighted BCE（当前主方案）
+E3 | 最佳Loss + 输入分辨率比较
+E4 | 最佳Loss + 简单多尺度GAP后Concat
+E5 | 最佳Loss + CBAM（独立实验）
+E6 | 最佳Loss + 10 Query Label Cross-Attention（独立实验）
+E7 | 单模块有效时才组合CBAM + LabelAttention
+E8 | 对照另一Backbone做误差互补/概率融合

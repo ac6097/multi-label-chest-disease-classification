@@ -1,0 +1,11 @@
+name: convnext_tiny
+num_labels: 10
+pretrained: true  # Official torchvision ImageNet weights are permitted.
+
+# E0 baseline. Run head=multiscale_gap, cbam=true, and label_cross_attention separately.
+head: gap  # gap | multiscale_gap | label_cross_attention
+cbam: false
+study_fusion: logit_mean  # probability_mean | probability_max | feature_mean | feature_max | attention_pooling
+label_d_model: 256
+label_heads: 4
+label_dropout: 0.1

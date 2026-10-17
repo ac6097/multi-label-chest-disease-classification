@@ -1,0 +1,17 @@
+﻿split,image_count,study_count
+test,1,775
+test,2,496
+test,3,122
+test,4,20
+test,5,1
+train,1,8507
+train,2,8369
+train,3,1465
+train,4,160
+train,5,9
+train,6,2
+train,7,1
+valid,1,391
+valid,2,380
+valid,3,81
+valid,4,7

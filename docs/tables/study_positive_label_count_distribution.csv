@@ -1,0 +1,13 @@
+﻿split,positive_code_count,study_count
+train,1,11597
+train,2,3659
+train,3,2197
+train,4,840
+train,5,185
+train,6,34
+train,7,1
+valid,1,511
+valid,2,170
+valid,3,131
+valid,4,39
+valid,5,8

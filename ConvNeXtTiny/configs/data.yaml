@@ -1,0 +1,28 @@
+# Shared read-only dataset at the repository root. Paths are resolved from ConvNeXtTiny/.
+image_root: ../cxr_first
+train_csv: ../cxr_first/train.csv
+val_csv: ../cxr_first/valid.csv
+test_csv: ../cxr_first/test.csv
+
+# Current source schema: one row per image; image path is derived from split/IDs/Dicom_id.
+image_id_column: Dicom_id
+subject_column: Subject_id
+study_column: Study_id
+label_column: Predict_class
+class_ids: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+class_names:
+  - Enlarged Cardiomediastinum
+  - Pneumothorax
+  - Consolidation
+  - Pneumonia
+  - Edema
+  - Cardiomegaly
+  - Atelectasis
+  - Lung Opacity
+  - Pleural Effusion
+  - No Finding
+
+# Official confirmation: listed IDs are positive; omitted IDs are negative in train/valid.
+label_semantics: closed_world
+image_size: 320
+num_workers: 4
