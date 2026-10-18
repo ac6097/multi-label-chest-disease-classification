@@ -87,7 +87,8 @@ def main():
         "model_forward_and_fusion_per_study": percentile_summary(forward_times),
         "model_forward_ms_per_input_image_mean": float(
             np.mean(np.asarray(forward_times) / np.asarray(image_counts)) * 1000),
-        "timing_scope": "Study-level single-item call; official 100 ms timing unit remains unconfirmed.",
+        "timing_scope": ("Study-level single-item call; the official rule is <=100 ms end-to-end "
+                         "per image, while multi-image Study accounting is unspecified."),
     }
     output = Path(args.output)
     if not output.is_absolute():

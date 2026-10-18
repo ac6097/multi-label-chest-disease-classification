@@ -1,0 +1,26 @@
+# Treatment: the only optimization change from train_bce_warmstart_control.yaml is loss.
+# pos_weight is estimated from unique, closed-world training Studies by the existing code.
+seed: 42
+epochs: 40
+image_budget: 16  # Matches the historical best-checkpoint metadata.
+grad_accumulation: 2
+learning_rate_backbone: 0.00002
+learning_rate_head: 0.0002
+weight_decay: 0.0001
+warmup_epochs: 2
+patience: 8
+freeze_backbone_epochs: 1
+freeze_batchnorm_stats: false
+gradient_clip_norm: 1.0
+
+loss: weighted_bce
+weighting: sqrt
+pos_weight_cap: 5.0  # Only used by weighting=cap; sqrt weights are not capped.
+gamma_pos: 0.0
+gamma_neg: 4.0
+asl_clip: 0.05
+
+amp: true
+amp_dtype: bfloat16
+output_dir: outputs/experiments/dn121_weighted_bce_sqrt_seed42
+resume: ""

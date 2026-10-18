@@ -20,7 +20,11 @@ def main():
     parser.add_argument("--train-config", default=str(PROJECT_DIR / "configs/train.yaml"))
     parser.add_argument("--model-config", default=str(PROJECT_DIR / "configs/model.yaml"))
     parser.add_argument("--resume", default=None)
+    parser.add_argument("--init-checkpoint", default=None,
+                        help="Load model weights only, then start a new optimizer/scheduler run")
     args = parser.parse_args()
+    if args.resume and args.init_checkpoint:
+        parser.error("--resume and --init-checkpoint are mutually exclusive")
     data_path, train_path, model_path = map(resolve_config_path,
         (args.data_config, args.train_config, args.model_config))
     data_cfg = resolve_data_paths(read_yaml(data_path), data_path)
@@ -76,8 +80,43 @@ def main():
     val_loader = DataLoader(val_data, batch_sampler=val_sampler, **loader_args)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    init_checkpoint = (resolve_config_path(args.init_checkpoint)
+                       if args.init_checkpoint else None)
     model_kwargs = {key: value for key, value in model_cfg.items() if key != "name"}
+    if init_checkpoint:
+        if not init_checkpoint.is_file():
+            raise FileNotFoundError(f"Initialization checkpoint not found: {init_checkpoint}")
+        # The checkpoint already contains the complete backbone, so do not fetch ImageNet
+        # weights before loading it. A strict load below rejects architectural mismatches.
+        model_kwargs["pretrained"] = False
     model = ChestXrayClassifier(**model_kwargs).to(device)
+    init_state = None
+    if init_checkpoint:
+        init_state = torch.load(init_checkpoint, map_location="cpu", weights_only=False)
+        if not isinstance(init_state, dict) or "model" not in init_state:
+            raise ValueError(f"Expected a project checkpoint with a 'model' state: {init_checkpoint}")
+        source_config = init_state.get("config") or {}
+        source_model_cfg = source_config.get("model_config")
+        if not isinstance(source_model_cfg, dict):
+            raise ValueError("Initialization checkpoint must include config.model_config so the "
+                             "architecture and Study fusion can be verified")
+        model_fields = ("name", "num_labels", "head", "cbam", "study_fusion",
+                        "label_d_model", "label_heads", "label_dropout")
+        model_mismatches = {
+            key: (source_model_cfg.get(key), model_cfg.get(key))
+            for key in model_fields
+            if source_model_cfg.get(key) != model_cfg.get(key)
+        }
+        source_data_cfg = source_config.get("data") or {}
+        if source_data_cfg.get("image_size") not in (None, data_cfg["image_size"]):
+            model_mismatches["image_size"] = (source_data_cfg.get("image_size"),
+                                               data_cfg["image_size"])
+        if source_config.get("label_semantics") not in (None, semantics):
+            model_mismatches["label_semantics"] = (source_config.get("label_semantics"), semantics)
+        if model_mismatches:
+            raise ValueError(f"Initialization checkpoint/config mismatch: {model_mismatches}")
+        model.load_state_dict(init_state["model"], strict=True)
+        del init_state
     groups = [
         {"params": model.backbone.parameters(), "lr": train_cfg["learning_rate_backbone"]},
         {"params": (model.classifier.parameters() if model.classifier is not None
@@ -121,22 +160,33 @@ def main():
         raise ValueError("loss must be bce, weighted_bce, or asl")
     criterion = criterion.to(device)
     logger = create_logger(Path(train_cfg["output_dir"]) / "outputs/logs/train.log")
-    logger.info("device=%s pretrained=%s fusion=%s loss=%s", device,
-                model_cfg.get("pretrained", False), model_cfg.get("study_fusion"), loss_name)
+    logger.info("device=%s imagenet_pretrained_init=%s fusion=%s loss=%s", device,
+                bool(model_cfg.get("pretrained", False) and not init_checkpoint),
+                model_cfg.get("study_fusion"), loss_name)
+    if init_checkpoint:
+        logger.info("initialized all model parameters strictly from %s; optimizer/scheduler start fresh",
+                    init_checkpoint)
     if weight_counts is not None:
         logger.info("training Study class counts and pos_weight=%s", weight_counts)
     if args.resume:
         train_cfg["resume"] = str(resolve_config_path(args.resume))
+    saved_model_cfg = dict(model_cfg)
+    if init_checkpoint:
+        saved_model_cfg["pretrained"] = False
     run_config = {
         **train_cfg,
         "data": {**data_cfg, "train_csv": str(data_cfg["train_csv"]),
                  "val_csv": str(data_cfg["val_csv"]), "image_root": str(data_cfg["image_root"])},
-        "model_config": model_cfg,
+        "model_config": saved_model_cfg,
         "class_ids": class_ids,
         "class_names": class_names,
         "label_semantics": semantics,
         "weight_counts": weight_counts,
-        "pretrained_weight_source": "torchvision ImageNet weights" if model_cfg.get("pretrained") else None,
+        "init_checkpoint": str(init_checkpoint) if init_checkpoint else None,
+        "pretrained_weight_source": (
+            "initialized from checkpoint" if init_checkpoint else
+            ("torchvision ImageNet weights" if model_cfg.get("pretrained") else None)
+        ),
         "study_fusion": model_cfg["study_fusion"],
     }
     fit(model, train_loader, val_loader, criterion, optimizer, scheduler, run_config,

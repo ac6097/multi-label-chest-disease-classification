@@ -43,6 +43,6 @@ python benchmark_latency.py --checkpoint checkpoint/best/best_by_macro_auc.pth
 
 训练按 E0→E8 逐步消融：Study 数据与标准 BCE 基线、损失对照、多图融合、分辨率、多尺度、CBAM、Label Cross-Attention、仅组合已验证模块、最后分析 DenseNet 与 ConvNeXt 误差互补。每次验证以 Study 为单位记录 Loss、Macro-AUROC、逐类 AUROC/AUPRC/F1、有效阳性/阴性数量、耗时和显存；缺正类或缺负类时 AUROC 为不可计算值。
 
-`predict.py` 生成官方长表 `Subject_id, Study_id, Predict_class, Probability`，每个测试 Study 输出类别 1–10 共 10 行。最终文件可用仓库根目录的 `scripts/validate_submission.py` 校验。`benchmark_latency.py` 在 checkpoint 生成后记录配置中融合方式的 Study 前向 p50/p95，以及图像解码预处理与设备传输时间。T4 实测延迟尚未运行；官方 100 ms 是按图像还是 Study 计时仍待确认。
+`predict.py` 生成官方长表 `Subject_id, Study_id, Predict_class, Probability`，每个测试 Study 输出类别 1–10 共 10 行。最终文件可用仓库根目录的 `scripts/validate_submission.py` 校验。`benchmark_latency.py` 在 checkpoint 生成后记录配置中融合方式的 Study 前向 p50/p95，以及图像解码预处理与设备传输时间。T4 实测延迟尚未运行；赛事官网约束为单张图像端到端不超过 100 ms，多图 Study 的总延迟如何计入仍未说明。
 
 `checkpoint/best/best_by_macro_auc.pth` 只保存模型权重和推理配置，供评估/预测使用；`checkpoint/last/last.pth` 保存优化器等训练状态，供断点续训使用。部署提交应选权重文件并按官方方式导出，单个模型文件仍需在 T4 提交包构建时确认不超过 500 MB。
