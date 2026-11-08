@@ -1,0 +1,14 @@
+name: convnext_tiny
+num_labels: 10
+pretrained: true
+head: dsap_rpb
+cbam: false
+study_fusion: logit_mean
+
+dsap_rpb_d_model: 256
+dsap_rpb_heads: 4
+dsap_rpb_dropout: 0.1
+dsap_rpb_max_relative_height: 16
+dsap_rpb_max_relative_width: 16
+dsap_rpb_position_scale_init: 1.0
+dsap_rpb_alpha_init: 0.1

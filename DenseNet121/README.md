@@ -45,4 +45,6 @@ python benchmark_latency.py --checkpoint checkpoint/best/best_by_macro_auc.pth
 
 `predict.py` 生成官方长表 `Subject_id, Study_id, Predict_class, Probability`，每个测试 Study 输出类别 1–10 共 10 行。最终文件可用仓库根目录的 `scripts/validate_submission.py` 校验。`benchmark_latency.py` 在 checkpoint 生成后记录配置中融合方式的 Study 前向 p50/p95，以及图像解码预处理与设备传输时间。T4 实测延迟尚未运行；官方 100 ms 是按图像还是 Study 计时仍待确认。
 
+从已有 checkpoint 权重开始新的续训、同时重新初始化 optimizer 和 scheduler，可传入 `--init-checkpoint`，例如 `python train.py --train-config configs/experiments/paired_standard_bce.yaml --init-checkpoint checkpoint/best/best_by_macro_auc.pth`。该入口严格加载模型 state dict、核对模型配置并记录初始化 checkpoint 的 SHA-256；它不能与恢复训练状态的 `--resume` 同时使用。每个实验应在自己的 `output_dir` 下保存产物。
+
 `checkpoint/best/best_by_macro_auc.pth` 只保存模型权重和推理配置，供评估/预测使用；`checkpoint/last/last.pth` 保存优化器等训练状态，供断点续训使用。部署提交应选权重文件并按官方方式导出，单个模型文件仍需在 T4 提交包构建时确认不超过 500 MB。

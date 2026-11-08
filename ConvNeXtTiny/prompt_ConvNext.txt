@@ -1,0 +1,624 @@
+
+# Codex 任务：ConvNeXt-Tiny 多尺度特征与空间信息保留实验
+
+## 一、实验背景与目标
+
+当前项目为胸部 X 光片十类别多标签疾病分类，使用 ConvNeXt-Tiny ImageNet 预训练 Backbone，最终按照 Study 级 Logit Mean 融合输出疾病概率。
+
+此前已经进行了以下实验：
+
+1. 原始 ConvNeXt-Tiny + GAP 分类头。
+2. 调整 Backbone 和分类头学习率。
+3. Linear Warmup + Cosine Annealing。
+4. Disease-Specific Attention Pooling。
+5. 二维正弦余弦位置编码。
+6. Relative Position Bias 空间 Self-Attention。
+7. 缩短余弦退火周期的完整训练实验。
+
+目前 Validation Macro-AUROC 大致集中在 0.78–0.79，增加复杂注意力分类头尚未带来稳定提升。
+
+另外，此前 DenseNet121 曾尝试 Dense Block 2/3/4 的多尺度 GAP 向量拼接，验证集 Macro-AUROC 从约 0.7888 下降至 0.7704。
+
+因此，本轮实验不再增加 Transformer、Disease Query 或类别关系建模，而是重新研究 ConvNeXt 对胸片图像特征的提取及空间信息保留能力。
+
+本轮重点检验两个假设：
+
+**假设 A：标准 GAP 将空间特征直接平均，可能损失与疾病诊断有关的局部区域分布信息。**
+
+**假设 B：仅使用 ConvNeXt Stage 4 的高级特征，可能没有充分利用 Stage 3 中较高分辨率的局部病理特征。**
+
+为此，分别进行 A1、B1、C1 三组独立实验，并与原始 ConvNeXt-Tiny + GAP 基线进行比较。
+
+## 二、实验组设计
+
+### A0：原始 ConvNeXt-Tiny + GAP 基线
+
+基线结构：
+
+Input → ConvNeXt Stage 1/2/3/4 → GAP → LayerNorm → Linear(10)
+
+采用原始 ConvNeXt-Tiny 结构，不增加额外注意力模块。
+
+320×320 输入条件下，最后的 Stage 4 特征通常为：
+
+F4 ∈ R[B,768,10,10]
+
+经过 GAP：
+
+z ∈ R[B,768]
+
+再通过十分类线性层获得：
+
+Logits ∈ R[B,10]
+
+要求首先核对已有基线的训练配置及权重。如果历史 GAP 基线与本轮使用相同数据、预处理、损失函数、学习率、调度器和验证口径，可以保留其结果作为对照。
+
+如果存在明显配置差异，则应在相同实验条件下重新训练 A0，使四组实验具备严格可比性。
+
+历史基线结果仍然保留作为额外参考，但不能与严格控制变量的基线混为一谈。
+
+### A1：ConvNeXt Stage 4 + Spatial Pyramid Pooling
+
+本实验只改变原始 GAP 的空间聚合方式，不改变 Backbone。
+
+完整结构：
+
+Input → ConvNeXt Stage 4 → SPP → Linear(10)
+
+SPP 使用两级池化：
+
+第一级：Adaptive Average Pooling(1×1)
+
+第二级：Adaptive Average Pooling(2×2)
+
+对于 Stage 4 特征 F4：
+
+z_global = GAP(F4)
+
+输出：
+
+[B,768]
+
+z_regional = AdaptiveAvgPool2d(F4,2×2)
+
+Flatten 后：
+
+[B,3072]
+
+拼接：
+
+z = Concat(z_global,z_regional)
+
+最终：
+
+[B,3840]
+
+接十分类线性层：
+
+Linear(3840,10)
+
+可以使用必要的特征归一化，但不引入额外注意力或大型 MLP。
+
+实验需要明确：
+
+- 原始 GAP 的 1×1 全局分支必须保留。
+- 2×2 区域特征能够保留粗粒度空间分布。
+- 不加入 Self-Attention。
+- 不加入 Disease Query。
+- 不加入 Relative Position Bias。
+- 不改变 Stage 4 的卷积结构。
+- SPP 使用固定的平均池化，不加入可学习空间权重。
+
+本组主要回答：
+
+**在 Stage 4 特征保持不变时，保留粗粒度空间分布能否提高 Macro-AUROC？**
+
+### B1：ConvNeXt Stage 3 + Stage 4 空间特征融合
+
+本实验研究多尺度特征提取。
+
+注意：这次不允许采用以前 DenseNet 实验中的“不同 Stage 分别 GAP，再拼接向量”的做法。
+
+必须在二维空间特征图层面完成融合。
+
+以 320×320 输入为例：
+
+Stage 3：
+
+F3 ∈ R[B,384,20,20]
+
+Stage 4：
+
+F4 ∈ R[B,768,10,10]
+
+先对两个分支分别进行 1×1 卷积通道投影：
+
+F3_proj = Conv1x1(F3,384→256)
+
+F4_proj = Conv1x1(F4,768→256)
+
+得到：
+
+F3_proj ∈ R[B,256,20,20]
+
+F4_proj ∈ R[B,256,10,10]
+
+使用双线性插值，把 Stage 4 特征上采样至 Stage 3 的分辨率：
+
+F4_up ∈ R[B,256,20,20]
+
+然后沿通道维度进行拼接：
+
+F_concat = Concat(F3_proj,F4_up)
+
+得到：
+
+F_concat ∈ R[B,512,20,20]
+
+再使用轻量 1×1 卷积融合不同阶段的特征：
+
+F_fused = Conv1x1(F_concat,512→256)
+
+配合必要的归一化与 GELU：
+
+F_fused ∈ R[B,256,20,20]
+
+最终采用标准 GAP：
+
+GAP(F_fused) → Linear(256,10)
+
+要求：
+
+1. Stage 3 和 Stage 4 特征必须从同一个 ConvNeXt Backbone 的真实前向过程获取。
+2. 不允许重复运行两次 Backbone。
+3. Stage 4 上采样仅负责特征分辨率对齐，不得声称上采样能够创造新的细节。
+4. 细粒度信息来自 Stage 3 的真实特征。
+5. 优先使用轻量投影与融合，避免大幅增加参数量。
+6. 不加入 DSAP、Transformer 或额外的类别注意力机制。
+7. 不修改预训练 Stage 内部的 ConvNeXt Block。
+8. 输出仍然是十个独立疾病 Logits。
+
+本组主要回答：
+
+**在最终仍然使用 GAP 的情况下，加入 Stage 3 的细粒度特征能否改善疾病识别？**
+
+### C1：Stage 3 + Stage 4 空间融合 + SPP
+
+这一组将 A1 与 B1 两种方法结合起来。
+
+结构为：
+
+Input → ConvNeXt Stage 3/4 → 空间特征融合 → SPP → Linear(10)
+
+其中 Stage 3/4 的空间融合模块必须与 B1 完全一致。
+
+即：
+
+F3_proj ∈ R[B,256,20,20]
+
+F4_up ∈ R[B,256,20,20]
+
+Concat → Conv1x1 → Norm/GELU
+
+得到：
+
+F_fused ∈ R[B,256,20,20]
+
+随后使用与 A1 相同的池化策略：
+
+AdaptiveAvgPool2d(1×1)
+
+得到：
+
+[B,256]
+
+AdaptiveAvgPool2d(2×2)
+
+Flatten 后：
+
+[B,1024]
+
+拼接：
+
+z ∈ R[B,1280]
+
+最终：
+
+Linear(1280,10)
+
+要求：
+
+- 多尺度空间融合实现与 B1 一致。
+- SPP 实现与 A1 一致。
+- 不再加入其他额外网络模块。
+- B1 和 C1 使用相同的融合输出维度。
+- 两组实验分别从相同来源的预训练权重初始化，不直接继承另一实验训练后的权重。
+
+本组主要回答：
+
+**多尺度空间特征融合与空间金字塔池化是否具有互补作用？**
+
+需要特别说明，A1、B1、C1 的分类器输入维度不同，这是结构实验的必要差异，但需要记录新增参数量及计算开销，避免忽略模型容量变化。
+
+## 三、训练配置统一
+
+三组新实验和必要时重新训练的 A0 基线，都必须使用统一配置。
+
+### 1. 训练周期
+
+总训练轮数：
+
+epochs = 20
+
+Warmup：
+
+warmup_epochs = 2
+
+Cosine Annealing：
+
+cosine_epochs = 18
+
+训练策略：
+
+Epoch 1–2：Linear Warmup
+
+Epoch 3–20：Cosine Annealing
+
+不设置 Epoch 21–40 的低学习率保持阶段。
+
+学习率在第 20 个 Epoch 结束时衰减至预设最低值，实验随之结束。
+
+### 2. 学习率
+
+Backbone 峰值学习率：
+
+1e-5
+
+新增分类头及融合模块峰值学习率：
+
+2e-4
+
+最低学习率沿用上一轮实验：
+
+Backbone min_lr = 5e-7
+
+Head min_lr = 1e-5
+
+四组实验使用相同的学习率调度形式和参数。
+
+Scheduler 应按真实 optimizer update 正确推进，兼容梯度累积。
+
+绘制完整的 Backbone LR 与 Head LR 曲线。
+
+### 3. Early Stopping
+
+本次关闭 Early Stopping。
+
+必须完成所有 20 Epoch，以观察完整训练过程以及过拟合趋势。
+
+但仍然保存：
+
+- best.pth：Validation Macro-AUROC 最高的 checkpoint。
+- last.pth：Epoch 20 的 checkpoint。
+
+所有 checkpoint 都保存在对应实验独立目录，不允许覆盖已有实验。
+
+### 4. 其他超参数
+
+保持所有实验一致，包括：
+
+- ImageNet 预训练初始化来源
+- 输入图像尺寸 320×320
+- 图像预处理及增强
+- Train/Validation 划分
+- Study 级 BatchSampler
+- Image Budget
+- Gradient Accumulation
+- AMP
+- AdamW
+- Weight Decay
+- Gradient Clipping
+- 随机种子 42
+- Study 级 Logit Mean
+- 验证集评价方式
+
+**损失函数统一采用 Standard BCEWithLogitsLoss，默认不使用额外正负样本加权。**
+
+此前某轮日志曾记录 `sqrt weighting` 与 `pos_weight_cap=5`，因此务必核实配置及实际执行代码。
+
+如果使用 Standard BCE，必须保证四组实验都一致，并在报告中说明与历史 Weighted BCE 实验存在损失配置差异。
+
+如果历史 A0 基线采用了其他加权配置，就不能把它当作严格控制变量的唯一基线，应重新训练匹配的 A0。
+
+本轮不引入：
+
+- Weighted BCE
+- ASL
+- Focal Loss
+- DSAP
+- Relative Position Bias
+- 新的位置编码模块
+- 新的 Dropout/正则化方案
+- 其他数据增强方法
+
+## 四、每个 Epoch 的完整统计
+
+所有模型必须分别记录完整 20 Epoch 的训练和验证结果。
+
+至少包括：
+
+1. Train Loss
+2. Validation Loss
+3. Train-Val Loss Gap
+4. Validation Macro-AUROC
+5. Validation Macro-F1（阈值0.5）
+6. Backbone Learning Rate
+7. Head Learning Rate
+8. 当前 Best Epoch
+9. 当前 Best Macro-AUROC
+10. GPU 峰值显存
+11. 每个 Epoch 训练耗时
+
+Train Loss 与 Validation Loss 必须采用一致的目标函数及样本统计口径。
+
+由于训练集存在图像增强，两者绝对值不一定严格同分布，应重点分析随 Epoch 变化的趋势。
+
+### 十种疾病独立统计
+
+对十个疾病分别记录：
+
+- AUROC
+- AUPRC
+- Precision
+- Recall
+- F1@0.5
+- 阳性 Study 数
+- 阴性 Study 数
+- TP、FP、TN、FN
+
+不仅保存最佳 Epoch 的逐类指标，还要保存每个 Epoch 的逐类 AUROC，便于观察某些类别是否随着训练出现性能下降。
+
+特别重点分析：
+
+Pneumonia
+
+Lung Opacity
+
+Consolidation
+
+Pneumothorax
+
+Atelectasis
+
+但最终 Macro-AUROC 仍然平等计算全部十个类别，不能只优化上述五类。
+
+## 五、模型结构与参数统计
+
+每组实验都需要报告：
+
+- Backbone 参数量
+- Head 参数量
+- 总参数量
+- 相比 A0 新增参数量
+- 可训练参数量
+- 输入输出 Tensor Shape
+- 模型 FLOPs 或 MACs（注明统计口径）
+- 模型 checkpoint 大小
+- 训练峰值显存
+- 验证阶段推理速度
+
+检查四组模型的 Backbone 预训练权重来源是否一致。
+
+A1、B1、C1 均使用 ImageNet 预训练权重初始化 Backbone。
+
+新添加的分类头和空间融合模块随机初始化。
+
+不允许把某组实验的最佳权重直接用于另一组实验初始化。
+
+如复用已有 A0 checkpoint，需要明确其配置与本轮条件是否一致。
+
+## 六、输出训练曲线
+
+每组实验生成：
+
+1. Train Loss / Validation Loss 双曲线。
+2. Validation Macro-AUROC 曲线。
+3. 十类别 AUROC 随 Epoch 变化的曲线。
+4. Backbone / Head Learning Rate 曲线。
+
+完成所有实验后，还应生成一套统一的对比图。
+
+### 对比图一：四组 Macro-AUROC
+
+同一坐标系展示 A0、A1、B1、C1 的 20 Epoch 验证 Macro-AUROC 曲线。
+
+### 对比图二：四组 Validation Loss
+
+同一坐标系展示验证损失变化。
+
+### 对比图三：最佳 Epoch 各疾病 AUROC
+
+使用分组柱状图或其他清晰方式，对比四组模型的十种疾病 AUROC。
+
+### 对比图四：Train-Val Loss Gap
+
+分析不同空间特征结构是否存在不同程度的过拟合。
+
+图表中标明实验名称、Epoch、数值与图例，防止混淆。
+
+如果某组历史基线没有完整 20 Epoch 日志，不允许虚构其逐轮数据；应重新训练匹配基线，或明确标注该对比只能使用历史最佳结果。
+
+## 七、最终对比分析报告
+
+完成三组新实验后，生成独立的综合实验分析 Markdown 文档。
+
+建议名称：
+
+convnext_spatial_multiscale_ablation_report.md
+
+### 1. 实验总体对比
+
+汇总如下表格：
+
+| 实验 | 特征来源 | 池化方式 | Best Epoch | Best Macro-AUROC | 相对 A0 差值 |
+|---|---|---|---|---|---|
+| A0 | Stage 4 | GAP | 实际结果 | 实际结果 | — |
+| A1 | Stage 4 | SPP | 实际结果 | 实际结果 | 实际结果 |
+| B1 | Stage 3+4 | GAP | 实际结果 | 实际结果 | 实际结果 |
+| C1 | Stage 3+4 | SPP | 实际结果 | 实际结果 | 实际结果 |
+
+### 2. A1 与 A0 对比
+
+回答：
+
+- 使用 SPP 后，是否改善 Macro-AUROC？
+- 保留粗粒度空间分布是否对 Pneumonia 和 Lung Opacity 有帮助？
+- 是否有其他疾病受损？
+- 是否增加过拟合？
+
+重点判断 GAP 的空间平均是否可能构成当前特征聚合瓶颈。
+
+如果 A1 提高，不得直接宣称已证明 GAP 是唯一瓶颈；还应考虑新增分类参数的影响。
+
+### 3. B1 与 A0 对比
+
+回答：
+
+- 引入 Stage 3 中间层特征后是否提高性能？
+- 哪些疾病得到了改善？
+- Pneumonia 和 Lung Opacity 是否对多尺度特征更敏感？
+- 是否由于引入新特征而出现更早过拟合？
+
+重点研究中间层特征利用不足的可能性。
+
+### 4. C1 与 A1、B1 对比
+
+分别比较：
+
+C1 vs A1
+
+C1 vs B1
+
+C1 vs A0
+
+判断：
+
+- SPP 与多尺度融合是否产生互补效果。
+- 是否存在单独有效、组合后反而退化的问题。
+- C1 的收益是否大于结构复杂度和计算成本。
+- 是否需要保留全部两个模块。
+
+禁止默认认为模块叠加必然带来性能提升。
+
+### 5. 各疾病差异分析
+
+针对十种疾病分别计算：
+
+ΔAUROC_A1 = AUROC_A1 - AUROC_A0
+
+ΔAUROC_B1 = AUROC_B1 - AUROC_A0
+
+ΔAUROC_C1 = AUROC_C1 - AUROC_A0
+
+重点观察 Pneumonia 和 Lung Opacity，同时检查其他疾病有没有明显下降。
+
+不要只比较 Macro-AUROC 的总分。
+
+### 6. 泛化能力分析
+
+结合每组完整 20 Epoch 的 Train Loss、Val Loss、Macro-AUROC：
+
+- 判断是否存在持续过拟合。
+- 比较过拟合可能出现的阶段。
+- 判断低学习率阶段能否改善验证指标。
+- 观察空间信息保留和多尺度融合是否改变泛化趋势。
+
+注意不能仅凭 Train Loss 下降就认为模型学习到了更好的医学图像特征。
+
+### 7. 统计可靠性
+
+如果保存了各模型的 Study 级验证预测概率，建议进一步进行按 Subject 分组的配对 Bootstrap，估计 A1、B1、C1 相对 A0 的 Macro-AUROC 差值及95%置信区间。
+
+验证集只有859个 Study，不能把极小的 AUROC 差距直接视为显著的性能提升。
+
+## 八、代码实现与实验管理
+
+首先审查现有 ConvNeXt 项目，确认 torchvision 中 Stage 3、Stage 4 的实际模块位置和输出形状。
+
+不要凭经验硬编码索引而不进行验证。
+
+建议实现为可配置模型：
+
+feature_mode:
+- stage4
+- stage3_stage4
+
+pooling_mode:
+- gap
+- spp
+
+根据配置对应：
+
+A0：stage4 + gap
+
+A1：stage4 + spp
+
+B1：stage3_stage4 + gap
+
+C1：stage3_stage4 + spp
+
+共享相同的融合模块实现，避免 B1、C1 出现非预期的结构差异。
+
+为所有新增网络模块增加基本单元测试及 Forward/Backward Smoke Test。
+
+确认：
+
+- Tensor Shape 正确。
+- Stage 3/4 梯度正常。
+- 新增融合层正常更新。
+- SPP 输出维度正确。
+- Study Logit Mean 不受影响。
+- checkpoint 可以保存和重新加载。
+- 原有十类推理及 submission 生成逻辑兼容。
+
+四组实验必须分别使用独立输出目录。
+
+不覆盖现有 ConvNeXt、DenseNet 或 DSAP-RPB checkpoint。
+
+## 九、实验执行顺序
+
+按照以下顺序开展：
+
+第一阶段：代码审查与 A0 基线配置核验。
+
+第二阶段：实现 A1、B1、C1 所需的 SPP 与多尺度空间融合模块。
+
+第三阶段：执行全部结构和梯度测试。
+
+第四阶段：如果已有 A0 无法满足控制变量要求，则先重新训练匹配的 A0。
+
+第五阶段：分别从预训练初始化开始训练 A1、B1、C1，每组完整 20 Epoch。
+
+第六阶段：统一收集四组实验指标和逐类预测。
+
+第七阶段：输出综合对比图表与分析报告。
+
+如果训练环境和数据可用，请按上述顺序执行；如果不能运行，明确说明限制并提供可复现命令，不要虚构结果。
+
+## 十、最终需要回答的问题
+
+本轮实验的目的不是单纯获得更高分数，而是明确识别当前 ConvNeXt-Tiny 在胸片识别任务中的潜在结构瓶颈。
+
+最终必须回答：
+
+**问题一：Stage 4 的标准 GAP 是否限制了模型对空间分布信息的利用？**
+
+**问题二：Stage 3 + Stage 4 的二维空间特征融合，是否比单独使用 Stage 4 更有效？**
+
+**问题三：多尺度空间融合与 SPP 结合，是否能获得超越单独模块的收益？**
+
+**问题四：哪些疾病从空间特征改造中受益最多，尤其是 Pneumonia 和 Lung Opacity？**
+
+**问题五：空间特征结构改变后，过拟合是否仍然存在，且是否影响最佳验证 Macro-AUROC？**
+
+最终依据实测结果决定后续网络结构，不预设任何一组一定优于原始 ConvNeXt。

@@ -1,0 +1,74 @@
+{
+  "experiment": "DINOv3_Feature_Optimization",
+  "seed": 42,
+  "source": {
+    "tiny_repo": "facebook/dinov3-convnext-tiny-pretrain-lvd1689m",
+    "tiny_revision": "10d30274b4d445111e2d5bf75ac93bbd94db274b",
+    "tiny_sha256": "bd30a9459d6149564ef53af6e8a1999980953b009b94cde836ac1bac4d339cb2",
+    "small_repo": "facebook/dinov3-convnext-small-pretrain-lvd1689m",
+    "small_revision": "main"
+  },
+  "data": {
+    "source_config": "../configs/hybrid_data.yaml",
+    "label_semantics": "closed_world",
+    "train_split": "train",
+    "validation_split": "valid",
+    "test_access": false
+  },
+  "training": {
+    "max_epochs": 20,
+    "warmup_epochs": 2,
+    "peak_lr_backbone": 0.00001,
+    "peak_lr_head": 0.0002,
+    "minimum_lr_backbone": 0.0000005,
+    "minimum_lr_head": 0.00001,
+    "optimizer": "AdamW",
+    "weight_decay": 0.01,
+    "gradient_clip_norm": 1.0,
+    "mixed_precision": "bfloat16",
+    "fused_adamw": true,
+    "seed": 42
+  },
+  "benchmark": {
+    "image_budgets": [1, 2, 4, 6, 8, 12, 16, 24, 32],
+    "target_effective_images_per_update": 32,
+    "effective_images_tolerance": 0.15,
+    "pin_memory": true,
+    "persistent_workers_when_positive": true,
+    "prefetch_factor": 2,
+    "screen_workers": [4],
+    "screen_gradient_checkpointing": [true],
+    "screen_channels_last": [true],
+    "refine_workers": [0, 2, 4],
+    "refine_gradient_checkpointing": [false, true],
+    "refine_channels_last": [false, true],
+    "short_warmup_updates": 2,
+    "short_measured_updates": 5,
+    "finalists": 3,
+    "long_warmup_updates": 5,
+    "long_measured_updates": 20,
+    "long_repeats_per_finalist": 3,
+    "maximum_reserved_memory_fraction": 0.9
+  },
+  "early_stopping": {
+    "strict_train_loss_decreases": 3,
+    "strict_valid_loss_increases": 3,
+    "macro_auroc_no_improvement_epochs": 3,
+    "comparison_epsilon": 0.0
+  },
+  "r3": {
+    "topk_ratio": 0.1,
+    "initial_alpha": 0.05,
+    "maximum_alpha": 0.2,
+    "mask_valid_fraction_threshold": 0.5
+  },
+  "comparison": {
+    "subject_bootstrap_replicates": 2000,
+    "subject_bootstrap_seed": 42,
+    "expected_validation_studies": 859
+  },
+  "outputs": {
+    "root": "outputs/experiments/DINOv3_Feature_Optimization",
+    "submission_size_limit_bytes": 500000000
+  }
+}

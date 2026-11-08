@@ -1,0 +1,66 @@
+experiment: V1_ConvNeXtV2_PixelPretrained
+output_dir: outputs/experiments/V1_ConvNeXtV2_PixelPretrained
+initialization:
+  h1_encoder_last: outputs/hybrid/h1_pretrain/encoder_last.pth
+  h1_full_last: outputs/hybrid/h1_pretrain/last.pth
+  h1_config: outputs/hybrid/h1_pretrain/config.json
+  h1_report: outputs/hybrid/h1_pretrain/pretrain_report.md
+  allow_imagenet_fallback: false
+model:
+  timm_model_name: convnextv2_tiny.fcmae_ft_in1k
+  image_size: 320
+  num_labels: 10
+  pooling: gap
+  classifier: linear
+  study_fusion: logit_mean
+  uses_vit: false
+  uses_decoder: false
+data:
+  data_config: configs/hybrid_data.yaml
+  transform: hybrid_resizepad_light_augmentation_raw_01
+  label_semantics: closed_world
+training:
+  seed: 42
+  data_loader_worker_seed: 42
+  epochs: 20
+  warmup_epochs: 2
+  cosine_end_epoch: 20
+  learning_rate_backbone: 1.0e-05
+  learning_rate_head: 0.0002
+  min_lr_backbone: 5.0e-07
+  min_lr_head: 1.0e-05
+  weight_decay: 0.01
+  gradient_clip_norm: 1.0
+  loss: standard_bce
+  weighting: none
+  early_stopping_enabled: false
+  scheduler_step_unit: optimizer_update
+  amp: true
+  amp_dtype: bfloat16
+  image_budget: 32
+  grad_accumulation: 1
+  num_workers: 4
+  pin_memory: true
+  optimizer_fused: true
+  gradient_checkpointing: true
+benchmark:
+  image_budgets:
+  - 2
+  - 4
+  - 8
+  - 12
+  - 16
+  - 24
+  - 32
+  target_effective_images: 32
+  warmup_updates: 5
+  measured_updates: 20
+  oom_memory_margin_fraction: 0.1
+  effective_batch_tolerance_fraction: 0.15
+  near_max_throughput_tolerance: 0.03
+comparison:
+  h1_run_dir: outputs/hybrid/h1
+  h1_epoch: 6
+  paired_subject_bootstrap_replicates: 2000
+  paired_subject_bootstrap_seed: 42
+  historical_h1_macro_auroc: 0.7933420385377938

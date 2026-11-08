@@ -1,0 +1,522 @@
+# Codex 任务：V1 — ConvNeXtV2-Tiny 单分支 + H1 像素自监督权重微调
+
+## 一、实验目的
+
+当前项目为胸部 X 光影像十标签多标签分类，评价指标为官方验证集 Study 级 Macro-AUROC。
+
+此前完成 Hybrid ConvNeXtV2 + ViT 的三组实验：
+
+| 实验 | 模型 | 最佳 Macro-AUROC | 最佳 Epoch |
+|---|---|---:|---:|
+| H0 | ConvNeXtV2 + ViT，无新增自监督 | 0.779060 | 3 |
+| H1 | ConvNeXtV2 + ViT，像素掩码重建 | 0.793342 | 6 |
+| H2 | ConvNeXtV2 + ViT，潜在特征重建 | 0.773039 | 9 |
+
+H1 是目前三组实验中最好的方案。
+
+现在需要进一步研究：**H1 的效果是否必须依赖 ViT 分支，还是仅使用经过胸片像素自监督预训练的 ConvNeXtV2 就能够获得接近甚至更好的性能？**
+
+因此新增 V1 实验：
+
+**V1 = H1 像素自监督预训练后的 ConvNeXtV2-Tiny + GAP + Linear(10)。**
+
+本轮只实施 V1，不同时开展 V0 或其他网络实验。
+
+关键要求：
+
+1. 必须复用 H1 已经完成的像素自监督预训练权重。
+2. 不重新执行 H1 的 20 Epoch 自监督预训练。
+3. 不使用 H1 已完成有监督分类微调的 Backbone 权重作为 V1 初始化。
+4. 不使用 ViT 分支。
+5. 不添加额外注意力、SPP、Stage 融合或其他未经确认的模块。
+6. 训练前重新进行单分支 GPU 吞吐量 Benchmark。
+7. 正式完成 20 Epoch 分类微调。
+8. 与历史 H1 结果进行对比分析。
+
+---
+
+## 二、第一阶段：检查并提取 H1 自监督权重
+
+这是本实验最重要的前置工作。
+
+首先检查当前项目结构，以及 H1 相关的：
+
+- 自监督训练代码
+- 自监督训练配置
+- 预训练 Checkpoint
+- 有监督微调 Checkpoint
+- 权重加载逻辑
+- 训练日志及报告
+
+需要明确区分：
+
+**A. H1 像素重建预训练完成后的 Encoder 权重。**
+
+**B. H1 十标签分类微调完成后的 Encoder 权重。**
+
+V1 必须使用 A，而不是 B。
+
+H1 的像素自监督阶段原本使用 ImageNet 预训练的 ConvNeXtV2 和 ViT，分别通过像素重建任务优化 Encoder。
+
+因此，只需提取 H1 自监督阶段训练结束时的 ConvNeXtV2-Tiny Encoder 参数。
+
+要求：
+
+1. 自动查找 H1 自监督预训练的最终 Checkpoint。
+2. 优先使用预先确定的最终轮次权重，而不是根据分类结果反向挑选自监督轮次。
+3. 确认权重来自 H1 的像素重建，而非 H2 的潜在特征重建。
+4. 确认 H1 自监督使用的图像来自官方许可训练集。
+5. 提取完整 ConvNeXtV2 Encoder 参数，包括 Stem、各 Stage、GRN 和归一化层。
+6. 删除与像素重建有关的 Decoder、Mask Token 和其他仅供预训练使用的参数。
+7. 不加载 H1 的 ViT Encoder 和融合分类头。
+8. 确认 ConvNeXtV2 每个可训练模块的权重正确映射。
+9. 检查权重缺失、多余参数、形状不匹配等情况。
+10. 保存原始 Checkpoint 路径及 SHA-256。
+
+严禁在实际没有加载成功时静默退回 ImageNet 权重，随后将实验错误标记为 V1。
+
+可以使用 `strict=False` 辅助排查原始自监督模型与分类模型之间的结构差异，但最终必须逐项确认全部 ConvNeXtV2 Backbone 参数均正确加载。
+
+如果没有找到 H1 自监督结束时的 Encoder 权重：
+
+- 先检查是否存在最终轮次、last、备份或包含 Encoder 的完整自监督 Checkpoint。
+- 不允许用 H1 分类阶段的 best.pth 冒充自监督权重。
+- 不允许擅自重新运行 20 Epoch 自监督训练。
+- 明确报告缺失的产物和原因，并停止 V1 正式训练。
+
+---
+
+## 三、V1 网络结构
+
+本轮使用单分支 ConvNeXtV2-Tiny。
+
+输入：
+
+`X: [B,3,320,320]`
+
+结构：
+
+`Input → ConvNeXtV2-Tiny → GAP → Linear(768,10)`
+
+ConvNeXtV2-Tiny 预期特征：
+
+| 阶段 | 特征尺寸 |
+|---|---|
+| Stage 1 | [B,96,80,80] |
+| Stage 2 | [B,192,40,40] |
+| Stage 3 | [B,384,20,20] |
+| Stage 4 | [B,768,10,10] |
+
+最终：
+
+`Stage4 → Global Average Pooling → [B,768]`
+
+分类头：
+
+`Linear(768,10)`
+
+输出：
+
+`[B,10]` raw logits。
+
+使用 Sigmoid 计算每个疾病标签的概率。
+
+不得加入：
+
+- ViT
+- SPP
+- Stage 3/4 Fusion
+- LCA
+- DSAP
+- RPB
+- 自定义位置编码
+- CBAM
+- MXA
+- 额外 Self-Attention
+- 复杂 MLP 分类头
+- 其他额外正则化或融合模块
+
+ConvNeXtV2 内部原生 GRN 保留。
+
+模型所有 Backbone 参数允许有监督微调，不默认冻结任何 Stage。
+
+---
+
+## 四、数据与图像预处理
+
+沿用 H0/H1/H2 原有数据划分及 Study 组织方式。
+
+输入尺寸保持：
+
+`320×320`
+
+沿用已经修复的 ResizePad：
+
+- 等比例缩放；
+- 使用 Padding 补齐；
+- 不改变原始长宽比；
+- 不进行会裁掉关键胸片内容的中心裁剪；
+- 保证 torchvision Resize 的 `(height,width)` 参数顺序正确。
+
+图像灰度转三通道。
+
+使用与 ConvNeXtV2 ImageNet 权重及 H1 训练配置兼容的归一化方案。
+
+保留此前的轻微数据增强：
+
+- Brightness ±5%
+- Contrast ±5%
+- Translation ≤2%
+- Scale 0.97–1.03
+- Rotation 0°
+- 不进行 Horizontal Flip
+- 不进行 Random Crop
+- 不新增 Mixup/CutMix
+- 不新增 CLAHE 或高斯去噪
+
+验证阶段不使用随机增强。
+
+保持与 H1 相同的十标签顺序和标签解析方式。
+
+不得改变官方训练、验证划分。
+
+本实验仅使用官方训练集进行有监督训练，官方验证集用于评估，不访问 Test 标签或使用 Test 结果调参。
+
+---
+
+## 五、Study Logit Mean
+
+沿用原来的 Study 级训练方法。
+
+一个 Study 可能包含多张胸片。
+
+对每张胸片分别预测：
+
+`logits_i ∈ R^10`
+
+然后在同一个 Study 内计算：
+
+`study_logits = mean(image_logits)`
+
+最终：
+
+`study_probs = sigmoid(study_logits)`
+
+使用 Study 级标签计算 BCE。
+
+特别注意：
+
+- 不在 Sigmoid 后进行平均。
+- 不改为 Probability Mean。
+- 不改为 Probability Max。
+- 不把一个 Study 的多张胸片视为独立标签样本计算最终分类 Loss。
+- 不为了适配 Image Budget 随意丢弃 Study 内的图像。
+
+保持与 H1 相同的 Study 级验证指标计算方式。
+
+---
+
+## 六、GPU Benchmark：先优化吞吐量再正式训练
+
+由于 V1 删除了 ViT，网络参数量、显存使用和计算负担都会发生变化。
+
+不能沿用 Hybrid H1 的 Batch 参数，也不能直接假设旧 ConvNeXt-Tiny 的 8/4 是最优配置。
+
+### 6.1 检测运行环境
+
+检查：
+
+- GPU 型号及显存
+- CUDA/PyTorch 版本
+- BF16 支持
+- 当前 DataLoader
+- NAS 数据读取方式
+- 现有 image_budget / grad_accumulation
+- 训练总图片数及 Study 数量
+
+### 6.2 Benchmark 候选配置
+
+自适应测试：
+
+`image_budget = [2,4,8,12,16,24,32]`
+
+根据显存和真实数据动态调整候选范围。
+
+`grad_accumulation` 尽可能维持与 H1 相同的目标有效训练规模，优先参考每次参数更新约32张图像的设置。
+
+但由于不同 Study 具有不同图片数量，必须使用实际处理图片数和 Study 数量进行统计。
+
+对每个候选执行真实训练步骤，包括：
+
+- DataLoader 取数据
+- ConvNeXtV2 前向
+- Study Logit Mean
+- BCE Loss
+- Backward
+- 梯度累积
+- AdamW Optimizer Step
+
+预热后测量稳定吞吐量。
+
+**核心评价指标：真实端到端训练 images/s。**
+
+同时记录：
+
+- GPU 计算 images/s
+- End-to-end images/s
+- 每个 Optimizer Update 耗时
+- 实际 Image Budget
+- 实际 Study 数量
+- Grad Accumulation
+- Peak Allocated GPU Memory
+- Peak Reserved GPU Memory
+- OOM 状态
+- DataLoader 等待时间
+- Benchmark 重复测量稳定性
+
+允许在不改变模型数学结构的条件下测试：
+
+- BF16 AMP
+- AdamW fused
+- 合理的 DataLoader num_workers
+- pin_memory
+- Gradient Checkpointing
+
+但是不要把最大化显存占用视为优化目标。
+
+不能通过改变有效 Batch、训练数据量或 Study Loss 口径来制造更高的 images/s。
+
+如果候选配置因显存不足失败，应记录失败原因并继续其他候选。
+
+选择稳定端到端 images/s 最高且具有合理显存余量的配置。
+
+生成：
+
+`v1_gpu_benchmark.csv`
+
+`v1_gpu_benchmark.md`
+
+将选定参数写入 V1 正式训练配置。
+
+Benchmark 完成后重新初始化模型和优化器，确保 Benchmark 不影响正式训练。
+
+---
+
+## 七、V1 有监督微调配置
+
+正式训练只需20 Epoch，不再执行像素自监督训练。
+
+统一采用：
+
+| 配置 | 数值 |
+|---|---|
+| Backbone | ConvNeXtV2-Tiny |
+| 初始化 | H1 像素自监督结束后的 CNN Encoder |
+| Input Size | 320×320 |
+| Epochs | 20 |
+| Warmup | 2 Epoch |
+| Cosine Annealing | 18 Epoch |
+| Backbone Peak LR | 1e-5 |
+| Head Peak LR | 2e-4 |
+| Backbone Minimum LR | 5e-7 |
+| Head Minimum LR | 1e-5 |
+| Optimizer | AdamW |
+| Weight Decay | 0.01 |
+| Gradient Clipping | 1.0 |
+| Loss | Standard BCEWithLogitsLoss |
+| Study Fusion | Logit Mean |
+| Seed | 42 |
+| AMP | BF16，支持时启用 |
+| Early Stopping | Disabled |
+
+Scheduler 按 Optimizer Update 进行，而不是简单按 Epoch 首尾更新。
+
+只使用 Standard BCE：
+
+- 不使用 pos_weight。
+- 不使用 sqrt/raw/capped weighting。
+- 不使用 ASL。
+- 不增加 Reconstruction Loss。
+- 不增加其他 Auxiliary Loss。
+
+本阶段只优化十标签有监督分类目标。
+
+---
+
+## 八、训练与验证日志
+
+每个 Epoch 必须记录：
+
+1. Epoch 编号。
+2. Train Loss。
+3. Validation Loss。
+4. Study 级 Macro-AUROC。
+5. Study 级 Macro-AUPRC。
+6. Macro-F1@0.5。
+7. 十类 AUROC。
+8. 十类 AUPRC。
+9. 十类 F1。
+10. Backbone LR。
+11. Head LR。
+12. End-to-end images/s。
+13. Epoch 耗时。
+14. Peak GPU Memory。
+15. Optimizer Update 数量。
+
+重点关注 Pneumonia 与 Lung Opacity。
+
+此外观察模型是否再次出现：
+
+- 第5–7轮过早达到最佳 AUROC；
+- Train Loss 持续下降；
+- Validation Loss 持续上升；
+- 后期 Macro-AUROC 下降。
+
+即使出现这一现象，仍然完成计划的20 Epoch，不启用自动 Early Stopping。
+
+最佳模型按照 Validation Macro-AUROC 保存。
+
+同时保存最终第20轮 Checkpoint。
+
+Checkpoint 应当包含：
+
+- Backbone 参数
+- 分类头参数
+- Optimizer 状态
+- Scheduler 状态
+- Epoch
+- Best Macro-AUROC
+- Label Mapping
+- Image Budget / Grad Accumulation
+- 训练配置
+- 初始化权重来源
+
+---
+
+## 九、正确性检查
+
+正式训练前必须完成 Smoke Test：
+
+1. 验证加载的是 H1 自监督 CNN 权重，不是 H1 分类微调权重。
+2. 验证 Backbone 权重的来源及 SHA-256。
+3. 验证 ConvNeXtV2 的 GRN 参数完整加载。
+4. 输入 `[B,3,320,320]` 得到正确的 Stage 4 特征。
+5. GAP 后维度为768。
+6. 分类头输出10个 Raw Logits。
+7. 多图片 Study 的 Logit Mean 正确。
+8. Standard BCE 前向及反向传播正确。
+9. Backbone 参数确实参与微调。
+10. GPU Benchmark 已完成并选择合适配置。
+11. 单步训练不存在 NaN/Inf。
+12. 没有 ViT、Decoder 或掩码重建模块参与本轮前向或反向。
+13. 数据预处理保持宽高比例正确。
+14. Validation 不包含训练样本泄漏。
+15. 保存的 Checkpoint 可以独立重新加载。
+
+检查完成后立即启动正式训练，无需再次询问确认。
+
+---
+
+## 十、实验结果对比
+
+本次重点比较 V1 与之前已经完成的 H1。
+
+H1 参考数据：
+
+- Backbone：ConvNeXtV2 + ViT
+- 初始化：ImageNet → 官方胸片像素自监督
+- Best Epoch：6
+- Validation Macro-AUROC：0.793342
+- Pneumonia AUROC：0.722252
+- Lung Opacity AUROC：0.712168
+- Params：49,620,490
+
+V1 使用相同胸片自监督阶段得到的 ConvNeXtV2 权重，但删除 ViT，并重新训练独立的分类头。
+
+生成对照表：
+
+| 指标 | Hybrid H1 | V1 |
+|---|---:|---:|
+| 参数量 | 49,620,490 | 实测 |
+| Best Epoch | 6 | 实测 |
+| Macro-AUROC | 0.793342 | 实测 |
+| Pneumonia AUROC | 0.722252 | 实测 |
+| Lung Opacity AUROC | 0.712168 | 实测 |
+| Train images/s | 实测 | 实测 |
+| Peak GPU Memory | 实测 | 实测 |
+| 推理延迟 | 实测 | 实测 |
+
+如果能够找到 H1 的完整验证集逐 Study 预测缓存，进行：
+
+- V1 − H1 的 Paired Subject Bootstrap；
+- 2000次以上重采样；
+- 95%置信区间；
+- 十类别 AUROC 差值分析。
+
+必须使用两组最佳 Checkpoint 在相同859个验证 Study 上的预测，并按照 Subject 分组重采样。
+
+不得用不同验证划分进行配对统计。
+
+还需要明确：
+
+V1 与 H1 的差异不仅包括是否存在 ViT，也包括分类头输入维度和有监督阶段 CNN 是否与 ViT 联合优化。因此该比较可以衡量删除 ViT 后整套单分支方案的实际效果，但不能严格归因于 ViT 的单独贡献。
+
+此外，目前不执行 V0，因此本轮也不能单独证明 FCMAE 对单分支 ConvNeXtV2 的收益。这个结论需要后续 V0 作为对照。
+
+---
+
+## 十一、文件与交付要求
+
+不得覆盖 H0/H1/H2 的原有代码和训练产物。
+
+创建独立 V1 实验目录，建议：
+
+`outputs/experiments/V1_ConvNeXtV2_PixelPretrained/`
+
+至少保存：
+
+- `config.json`
+- `h1_pretrain_weight_verification.md`
+- `v1_gpu_benchmark.csv`
+- `v1_gpu_benchmark.md`
+- `train_log.csv`
+- `per_class_metrics.csv`
+- `best.pth`
+- `last.pth`
+- `v1_training_report.md`
+- `v1_vs_h1_comparison.md`
+- `train_valid_loss.png`
+- `macro_auroc_curve.png`
+- `per_class_auroc_comparison.png`
+- `gpu_throughput_comparison.png`
+
+必要时加入模型参数量、推理时间与显存对比图。
+
+---
+
+## 十二、立即执行
+
+不要停留在设计建议阶段。
+
+严格按以下顺序执行：
+
+**检查H1产物 → 验证自监督Checkpoint → 提取ConvNeXtV2权重 → 构建单分支V1 → Smoke Test → GPU images/s Benchmark → 选择最优Batch参数 → 完整20 Epoch微调 → 输出结果与H1对比。**
+
+特别强调：
+
+**本次不允许重新执行20轮像素自监督预训练。**
+
+只要 H1 的自监督 Encoder Checkpoint 完整，就直接复用并进入 V1 分类训练。
+
+如果缺少必要的自监督权重，准确报告阻碍，不得用其他权重替代后继续冒称为 V1。
+
+训练完成后重点回答：
+
+1. 去掉 ViT 后，Macro-AUROC 是否提高？
+2. Pneumonia 和 Lung Opacity 是否改善？
+3. 单分支网络是否减轻过拟合？
+4. 参数量和显存节省多少？
+5. images/s 提高多少？
+6. 是否值得以 ConvNeXtV2 单分支替代 Hybrid H1？
+
+所有结论必须依据实际训练日志和验证数据，不得虚构结果。

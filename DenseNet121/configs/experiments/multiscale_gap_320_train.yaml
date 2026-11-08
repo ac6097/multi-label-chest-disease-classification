@@ -1,0 +1,24 @@
+seed: 42
+epochs: 8
+image_budget: 16
+grad_accumulation: 2
+learning_rate_backbone: 0.000005
+learning_rate_head: 0.00005
+weight_decay: 0.0001
+warmup_epochs: 2
+patience: 4
+freeze_backbone_epochs: 1
+freeze_batchnorm_stats: false
+gradient_clip_norm: 1.0
+
+loss: bce
+weighting: sqrt
+pos_weight_cap: 5.0
+gamma_pos: 0.0
+gamma_neg: 4.0
+asl_clip: 0.05
+
+amp: true
+amp_dtype: bfloat16
+output_dir: outputs/experiments/multiscale_gap_320_e6
+resume: ""

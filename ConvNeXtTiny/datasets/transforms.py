@@ -11,7 +11,7 @@ class ResizePad:
         width, height = image.size
         scale = self.size / max(width, height)
         new_size = (max(1, round(width * scale)), max(1, round(height * scale)))
-        image = T.functional.resize(image, new_size, InterpolationMode.BILINEAR)
+        image = T.functional.resize(image, (new_size[1], new_size[0]), InterpolationMode.BILINEAR)
         resized_width, resized_height = image.size
         pad_w, pad_h = self.size - resized_width, self.size - resized_height
         left, top = pad_w // 2, pad_h // 2

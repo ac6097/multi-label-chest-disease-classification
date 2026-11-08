@@ -1,0 +1,35 @@
+seed: 42
+epochs: 40
+image_budget: 8
+grad_accumulation: 4
+learning_rate_backbone: 0.00001
+learning_rate_head: 0.0002
+weight_decay: 0.01
+warmup_epochs: 2
+patience: 8
+early_stopping_enabled: false
+cosine_end_epoch: 20
+min_lr_backbone: 0.0000005
+min_lr_head: 0.00001
+freeze_backbone_epochs: 1
+gradient_clip_norm: 1.0
+
+loss: bce
+weighting: sqrt
+pos_weight_cap: 5.0
+gamma_pos: 0.0
+gamma_neg: 4.0
+asl_clip: 0.05
+
+amp: true
+amp_dtype: bfloat16
+scheduler_step_unit: optimizer_update
+output_dir: outputs/experiments/ConvNeXt_DSAP_RPB_Cosine20_NoEarlyStop
+resume: ""
+requires_smoke_test: true
+save_experiment_artifacts: true
+save_full_state_for_best: true
+best_checkpoint_name: best.pth
+last_checkpoint_name: last.pth
+milestone_epochs: [20]
+plot_epoch_markers: [2, 7, 20, 40]

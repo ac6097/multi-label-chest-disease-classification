@@ -4,11 +4,13 @@ import torch
 
 
 def save_checkpoint(path, model, optimizer=None, scheduler=None, scaler=None, epoch=0,
-                    best_metric=None, config=None, labels=None, stale_epochs=0):
+                    best_metric=None, config=None, labels=None, stale_epochs=0,
+                    best_epoch=None):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     state = {"model": model.state_dict(), "epoch": epoch, "best_metric": best_metric,
-             "config": config, "labels": labels, "stale_epochs": stale_epochs}
+             "config": config, "labels": labels, "stale_epochs": stale_epochs,
+             "best_epoch": best_epoch}
     if optimizer is not None:
         state["optimizer"] = optimizer.state_dict()
     if scheduler is not None:
@@ -16,7 +18,8 @@ def save_checkpoint(path, model, optimizer=None, scheduler=None, scaler=None, ep
     if scaler is not None:
         state["scaler"] = scaler.state_dict()
     torch.save(state, path)
-    metadata = {"epoch": epoch, "best_macro_auroc": best_metric, "labels": labels,
+    metadata = {"epoch": epoch, "best_epoch": best_epoch,
+                "best_macro_auroc": best_metric, "labels": labels,
                 "config": config, "checkpoint": path.name}
     path.with_suffix(".json").write_text(json.dumps(metadata, indent=2, ensure_ascii=False, default=str), encoding="utf-8")
 

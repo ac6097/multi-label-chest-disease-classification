@@ -37,7 +37,7 @@ def main():
         num_workers=data_cfg["num_workers"], pin_memory=torch.cuda.is_available(),
         collate_fn=collate_studies)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    state = torch.load(checkpoint_path, map_location=device, weights_only=False)
+    state = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
     saved_model_cfg = dict(state.get("config", {}).get("model_config", model_cfg))
     saved_model_cfg["pretrained"] = False  # Checkpoint already contains its backbone weights.
     model = ChestXrayClassifier(**{key: value for key, value in saved_model_cfg.items()

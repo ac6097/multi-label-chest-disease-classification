@@ -1,0 +1,9 @@
+name: densenet121
+num_labels: 10
+pretrained: true
+head: gap
+cbam: false
+study_fusion: logit_mean
+label_d_model: 256
+label_heads: 4
+label_dropout: 0.1

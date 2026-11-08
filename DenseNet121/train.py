@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import math
 from pathlib import Path
 
@@ -20,7 +21,14 @@ def main():
     parser.add_argument("--train-config", default=str(PROJECT_DIR / "configs/train.yaml"))
     parser.add_argument("--model-config", default=str(PROJECT_DIR / "configs/model.yaml"))
     parser.add_argument("--resume", default=None)
+    parser.add_argument("--init-checkpoint", default=None,
+                        help="Initialize model weights strictly while starting fresh optimizer and scheduler state")
+    parser.add_argument("--init-backbone-checkpoint", default=None,
+                        help="Initialize only a compatible DenseNet backbone and start a fresh classifier, optimizer, and scheduler")
     args = parser.parse_args()
+    if sum(bool(value) for value in (args.resume, args.init_checkpoint,
+                                     args.init_backbone_checkpoint)) > 1:
+        parser.error("--resume, --init-checkpoint, and --init-backbone-checkpoint are mutually exclusive")
     data_path, train_path, model_path = map(resolve_config_path,
         (args.data_config, args.train_config, args.model_config))
     data_cfg = resolve_data_paths(read_yaml(data_path), data_path)
@@ -75,9 +83,68 @@ def main():
     train_loader = DataLoader(train_data, batch_sampler=train_sampler, **loader_args)
     val_loader = DataLoader(val_data, batch_sampler=val_sampler, **loader_args)
 
+    initial_checkpoint_path = (resolve_config_path(args.init_checkpoint).resolve()
+                               if args.init_checkpoint else None)
+    backbone_checkpoint_path = (resolve_config_path(args.init_backbone_checkpoint).resolve()
+                                if args.init_backbone_checkpoint else None)
+    source_checkpoint_path = initial_checkpoint_path or backbone_checkpoint_path
+    if source_checkpoint_path is not None:
+        # The initializer already includes the backbone weights; avoid downloading ImageNet weights.
+        model_cfg["pretrained"] = False
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_kwargs = {key: value for key, value in model_cfg.items() if key != "name"}
     model = ChestXrayClassifier(**model_kwargs).to(device)
+    initial_checkpoint_sha256 = None
+    initialization_mode = None
+    if source_checkpoint_path is not None:
+        initial_state = torch.load(source_checkpoint_path, map_location="cpu", weights_only=False)
+        if backbone_checkpoint_path is not None:
+            saved_model_cfg = dict((initial_state.get("config") or {}).get("model_config") or {})
+            if saved_model_cfg.get("name") != model_cfg.get("name"):
+                raise ValueError("Backbone initializer must use the same DenseNet model name")
+            if saved_model_cfg.get("head") != "gap" or bool(saved_model_cfg.get("cbam", False)):
+                raise ValueError("Backbone initializer must be the plain DenseNet GAP checkpoint")
+            if model_cfg.get("head") != "multiscale_gap" or bool(model_cfg.get("cbam", False)):
+                raise ValueError("Backbone-only initialization is reserved for the multiscale GAP experiment")
+            checkpoint_model = initial_state.get("model")
+            if not isinstance(checkpoint_model, dict):
+                raise ValueError("Backbone initializer does not contain a model state dict")
+            prefix = "backbone."
+            source_backbone = {
+                key[len(prefix):]: value for key, value in checkpoint_model.items()
+                if key.startswith(prefix)
+            }
+            target_backbone = model.backbone.state_dict()
+            missing = sorted(set(target_backbone) - set(source_backbone))
+            unexpected = sorted(set(source_backbone) - set(target_backbone))
+            shape_mismatches = sorted(
+                key for key in set(source_backbone) & set(target_backbone)
+                if tuple(source_backbone[key].shape) != tuple(target_backbone[key].shape)
+            )
+            if missing or unexpected or shape_mismatches:
+                raise ValueError(
+                    "Backbone state mismatch: "
+                    f"missing={missing[:5]}, unexpected={unexpected[:5]}, "
+                    f"shape_mismatches={shape_mismatches[:5]}"
+                )
+            model.backbone.load_state_dict(source_backbone, strict=True)
+            initialization_mode = "backbone_only"
+        else:
+            saved_model_cfg = dict((initial_state.get("config") or {}).get("model_config") or {})
+            expected_model_cfg = dict(model_cfg)
+            saved_model_cfg.pop("name", None)
+            expected_model_cfg.pop("name", None)
+            saved_model_cfg["pretrained"] = False
+            expected_model_cfg["pretrained"] = False
+            if saved_model_cfg != expected_model_cfg:
+                raise ValueError("Initialization checkpoint model_config does not match --model-config")
+            model.load_state_dict(initial_state["model"], strict=True)
+            initialization_mode = "full_model"
+        digest = hashlib.sha256()
+        with source_checkpoint_path.open("rb") as stream:
+            for block in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(block)
+        initial_checkpoint_sha256 = digest.hexdigest()
     groups = [
         {"params": model.backbone.parameters(), "lr": train_cfg["learning_rate_backbone"]},
         {"params": (model.classifier.parameters() if model.classifier is not None
@@ -123,6 +190,11 @@ def main():
     logger = create_logger(Path(train_cfg["output_dir"]) / "outputs/logs/train.log")
     logger.info("device=%s pretrained=%s fusion=%s loss=%s", device,
                 model_cfg.get("pretrained", False), model_cfg.get("study_fusion"), loss_name)
+    if source_checkpoint_path is not None:
+        logger.info("initialized model weights from checkpoint=%s mode=%s sha256=%s; optimizer and scheduler are fresh",
+                    source_checkpoint_path, initialization_mode, initial_checkpoint_sha256)
+        if initialization_mode == "backbone_only":
+            logger.info("DenseNet backbone keys and shapes matched strictly; multiscale classifier remains freshly initialized")
     if weight_counts is not None:
         logger.info("training Study class counts and pos_weight=%s", weight_counts)
     if args.resume:
@@ -138,6 +210,9 @@ def main():
         "weight_counts": weight_counts,
         "pretrained_weight_source": "torchvision ImageNet weights" if model_cfg.get("pretrained") else None,
         "study_fusion": model_cfg["study_fusion"],
+        "initialization_mode": initialization_mode,
+        "initial_checkpoint": str(source_checkpoint_path) if source_checkpoint_path else None,
+        "initial_checkpoint_sha256": initial_checkpoint_sha256,
     }
     fit(model, train_loader, val_loader, criterion, optimizer, scheduler, run_config,
         device, logger, class_names=class_names)

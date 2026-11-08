@@ -1,0 +1,741 @@
+# Codex 任务：Hybrid ConvNeXtV2–ViT 三组掩码自监督消融实验
+
+## 一、项目背景与本次目标
+
+当前项目为胸部 X 光图像十标签多标签分类，采用官方提供的 train/valid/test 数据集，评价指标以 Study 级 Macro-AUROC 为主。
+
+此前已经尝试过 ConvNeXt-Tiny 学习率调整、Standard/Weighted BCE、ASL、Label Cross-Attention、DSAP-RPB、SPP、Stage 3/4 特征融合等方案，均未获得足以替代原始 ConvNeXt GAP 基线的稳定改善。
+
+本轮不再继续复杂化分类头，转而研究更强的视觉特征提取架构，以及官方胸片数据上的掩码自监督训练。
+
+参考论文：
+
+- Hybrid ConvNeXtV2–ViT Architecture for Chest X-Ray Diagnosis（2026）
+- ConvNeXt V2: Co-designing and Scaling ConvNets with Masked Autoencoders（2023）
+
+本次任务要求：
+
+1. 实现 ConvNeXtV2 + ViT 双分支网络。
+2. 完成三组 H0/H1/H2 消融。
+3. 三组都从完全相同的 ImageNet 预训练权重初始化。
+4. H1/H2 仅使用官方允许的胸片数据进行额外自监督预训练。
+5. H2 不使用 Teacher–Student 架构。
+6. 掩码比例固定为 60%，第一轮只使用随机掩码，不增加 MaskAD 的多策略掩码。
+7. 有监督分类沿用 Standard BCE、Study Logit Mean、轻微数据增强和 2+18 Epoch 学习率调度。
+8. 正式训练前必须完成 GPU 吞吐量 Benchmark，优化 image_budget、grad_accumulation 等参数，主要衡量指标为 images/s。
+9. Benchmark 完成后直接启动正式训练，不需要再次等待确认。
+
+请先检查项目现有代码、配置、运行环境和历史结果，不要直接套用旧版 ConvNeXt-Tiny 的参数。
+
+---
+
+## 二、数据使用边界
+
+仅允许使用以下数据：
+
+- 官方 `train.csv` 对应的胸片图像及必要元数据。
+- 官方 `valid.csv` 用于有监督验证和选择最佳模型。
+- 官方 `test.csv` 保持独立，仅在最终提交时运行推理。
+
+H1/H2 的胸片自监督阶段先只使用官方 train 图像，不读取 valid/test 图像参与梯度更新，避免验证集和测试集污染。
+
+允许加载现成 ImageNet 预训练权重，但不得额外下载 MIMIC-CXR、CheXpert、VinBigData 或其他非官方医学影像数据进行预训练。
+
+不允许使用官方 valid/test 的疾病标签参与训练、模型选择之外的优化或伪标签学习。
+
+必须记录三个实验实际使用的图像清单、Study 和 Subject 数量，并检查官方训练与验证划分是否存在 Subject 重叠。
+
+NAS 原始图像只读使用，不修改原始数据、不重排原始目录。沿用当前可用的读取流程，不开展与本次目标无关的 NAS I/O 重构。
+
+---
+
+## 三、统一 Hybrid Backbone
+
+### 3.1 Backbone 选择
+
+优先采用：
+
+- ConvNeXtV2-Tiny
+- ViT-Small/16（12 Transformer Blocks）
+
+使用 timm 或经过验证的官方实现。
+
+优先检查以下 ImageNet 权重是否能正确加载：
+
+- `convnextv2_tiny.fcmae_ft_in1k`
+- `vit_small_patch16_224.augreg_in1k`
+
+上述名称是建议候选，请按照项目实际 timm 版本检查可用模型名称和预训练权重，不要仅凭字符串推断权重成功加载。
+
+两组权重都必须先确定并保存，之后 H0/H1/H2 一律从同一份权重初始化。
+
+记录：
+
+- 模型名称和来源
+- timm/PyTorch 版本
+- 权重 SHA-256
+- 权重的预训练经历
+- 加载成功、缺失和多余参数情况
+- 实际训练参数量
+
+不允许某组使用不同版本的 ImageNet 权重。
+
+### 3.2 ConvNeXtV2 分支
+
+使用完整 ConvNeXtV2-Tiny Backbone。
+
+输入：
+
+`[B,3,320,320]`
+
+主要阶段输出预期为：
+
+- Stage 1：`[B,96,80,80]`
+- Stage 2：`[B,192,40,40]`
+- Stage 3：`[B,384,20,20]`
+- Stage 4：`[B,768,10,10]`
+
+最终对 Stage 4 使用 GAP：
+
+`[B,768,10,10] → [B,768]`
+
+这里的尺寸必须通过实际前向测试确认，不得依赖对不同 timm 版本 Stage 索引的猜测。
+
+### 3.3 ViT 分支
+
+使用完整 ViT-Small/16，并保留其原生 Self-Attention、CLS Token 和位置编码。
+
+输入：
+
+`[B,3,320,320]`
+
+Patch Size = 16，因此：
+
+`320/16 = 20`
+
+共得到：
+
+`20×20 = 400` 个图像 Patch Tokens。
+
+ViT 的 12 个 Transformer Blocks 正常执行，最终取 CLS Token：
+
+`[B,384]`
+
+原始 ImageNet 224×224 位置编码必须正确插值适配至 320×320 的 Patch 网格。
+
+需要验证插值后的网格位置和 CLS Token 位置正确，禁止直接丢弃或随机重新初始化全部位置编码。
+
+### 3.4 特征融合
+
+将两个分支最终特征直接拼接：
+
+`z = concat(z_convnextv2, z_vit)`
+
+预期：
+
+`[B,768] + [B,384] → [B,1152]`
+
+然后使用简单分类头：
+
+`Linear(1152,10)`
+
+输出十个 raw logits。
+
+不增加 SPP、DSAP、LCA、CBAM、MXA、额外空间 Self-Attention、Label Attention、Stage 融合或疾病专属分类器。
+
+ViT 原生 Self-Attention 和 ConvNeXtV2 原生 GRN 必须保留。
+
+分类结构在 H0、H1、H2 中必须完全一致。
+
+### 3.5 Study 级 Logit Mean
+
+保持原有 Study 级训练和验证机制。
+
+对一个 Study 中的每张图像分别执行双分支网络：
+
+`image_i → logits_i ∈ R^10`
+
+然后：
+
+`study_logits = mean(logits_i, dim=images)`
+
+使用 Study Logits 与 Study 真实标签计算 BCE。
+
+推理时：
+
+`study_probs = sigmoid(study_logits)`
+
+不允许先对单张图像执行 Sigmoid 再平均，不采用 Probability Max。
+
+注意：同一 Study 的多张胸片应共享 Study 标签，但不代表所有 Study 都只有一张图像。
+
+---
+
+## 四、统一图像预处理及增强
+
+输入分辨率固定为 320×320。
+
+沿用已经修复的 ResizePad：
+
+1. 读取原始胸片。
+2. 保持长宽比等比例缩放。
+3. 使用 Padding 补齐至正方形。
+4. 转换为三通道。
+5. 进行适配预训练模型的 Normalize。
+
+特别检查 torchvision 的 Resize 参数顺序是 `(height,width)`，不允许重新引入之前的宽高颠倒问题。
+
+ConvNeXtV2 和 ViT 如果使用不同的预训练均值/标准差，应从同一张增强后的基础图像分别进行归一化，不要让其中一个分支错误地使用另一个分支的统计量。
+
+H1 像素重建目标必须来自正确的未遮挡基础图像；重建损失的像素数值域需固定，例如 `[0,1]`，不能将错误归一化后的像素直接作为重建目标。
+
+继续沿用原先已经确定的轻微增强：
+
+- Brightness：±5%
+- Contrast：±5%
+- Translation：不超过2%
+- Scale：0.97–1.03
+- Rotation：0°
+- 不新增 Horizontal Flip
+- 不新增随机中心裁剪或随机区域裁剪
+- 不新增 Mixup/CutMix
+- 不新增 Gaussian Blur/CLAHE
+
+增强应当对两个 Backbone 使用同一张经过增强的图像，不允许两个分支分别随机进行不同的几何变换。
+
+本轮 H1/H2 自监督阶段也沿用轻微增强。先对原图做增强，再从同一张增强后的未遮挡图像生成掩码输入和重建目标；避免重建目标与输入来自两次不同的随机增强。
+
+验证阶段不执行随机增强。
+
+---
+
+## 五、三组实验定义
+
+本次只进行 H0、H1、H2。
+
+### H0：无额外胸片掩码自监督预训练
+
+加载 ImageNet 预训练的 ConvNeXtV2-Tiny 和 ViT-Small/16。
+
+直接进入官方十标签有监督微调。
+
+不使用 Mask Decoder，不进行任何额外的胸片掩码重建训练。
+
+注意：ConvNeXtV2 官方 ImageNet 权重本来可能经过 FCMAE 训练，因此 H0 的准确含义是“没有额外的官方胸片领域自监督预训练”，不是“模型历史上完全没有经过掩码学习”。
+
+### H1：原始像素掩码重建
+
+从与 H0 完全相同的 ImageNet 初始化开始。
+
+先在官方 train 图像上执行 FCMAE 风格的随机掩码像素重建。
+
+掩码比例固定为：
+
+`mask_ratio = 0.60`
+
+优先采用 FCMAE 的 32×32 原图 Patch 遮挡单元。
+
+320×320 图像对应：
+
+`10×10 = 100` 个遮挡单元。
+
+随机遮挡其中60个单元。
+
+要求两个分支均接受与同一个随机掩码对应的被遮挡输入，并分别通过轻量重建 Decoder 预测缺失像素。
+
+ConvNeXtV2 分支应优先参考官方 FCMAE 的 Mask Encoder/Decoder 设计，防止被遮挡区域的原始像素泄漏到可见特征中。
+
+考虑到本项目使用 Windows + 8GB GPU，若官方 MinkowskiEngine 稀疏卷积实现与环境不兼容，不要为了复刻原始代码而破坏 PyTorch 环境。可以采用明确记录的普通 PyTorch 掩码像素重建实现，但必须说明它与原版稀疏 FCMAE 的差异，不能冒称完全复现。
+
+ViT 分支对与 32×32 区域对应的 16×16 Patch Tokens 施加同样的空间遮挡，不能让被遮挡 Patch 的真实图像内容直接进入 Encoder。
+
+计算只覆盖被遮挡位置的像素重建 MSE：
+
+`L_H1 = 0.5 * L_pixel_cnn + 0.5 * L_pixel_vit`
+
+两个分支损失必须经过统一、可比较的尺度处理。
+
+重建 Decoder 只在预训练期间存在。
+
+自监督训练结束后：
+
+- 保存两条分支已经更新的 Encoder 权重。
+- 删除像素重建 Decoder。
+- 恢复完整输入图像。
+- 使用相同双分支分类头开始疾病分类微调。
+
+不得把 Decoder 接入最终推理网络。
+
+### H2：潜在特征掩码重建
+
+从与 H0、H1 完全相同的 ImageNet 初始化开始。
+
+不使用 Teacher–Student、不使用 EMA Teacher、不增加知识蒸馏网络。
+
+本组只采用随机掩码，比例同样为60%。
+
+H2 与 H1 尽可能共享相同的随机空间掩码定义。
+
+将 10×10 的 32×32 像素区域掩码映射至 20×20 特征网格，每个区域对应2×2个特征位置。
+
+#### H2-A：ConvNeXtV2 Stage 3 特征重建
+
+输入完整胸片，提取：
+
+`F3 ∈ [B,384,20,20]`
+
+在 Stage 3 输出上施加60%空间 Mask。
+
+使用可学习 Mask Token 或固定替换方式遮挡对应位置，不保留这些位置的原始特征值。
+
+被遮挡的 F3 继续经过 ConvNeXtV2 Stage 4，并接入轻量特征重建 Decoder。
+
+Decoder 将输出恢复至：
+
+`F3_hat ∈ [B,384,20,20]`
+
+原始未遮挡 F3 的 `detach()` 副本用作重建目标。
+
+仅在被遮挡空间位置计算归一化特征 MSE：
+
+`L_cnn_latent = masked_mse(F3_hat, stopgrad(F3))`
+
+不得让目标张量本身通过重建 Loss 反向传播。
+
+Stage 3 和 Stage 4 必须都实际参与自监督参数更新，不允许只训练 Decoder。
+
+必须明确记录：Stage 3 是在完整图像经过此前卷积后才施加的 Mask，因此可见特征可能已经包含部分被遮挡区域的信息。这是本次规定的中间层特征重建设计，不应声称具有原始 FCMAE 稀疏编码器完全相同的信息隔离效果。
+
+#### H2-B：ViT 中间层 Patch Tokens 重建
+
+以12层 ViT 为例，选择第6个 Transformer Block 的输出作为中间特征。
+
+得到：
+
+`T6 ∈ [B,400,384]`
+
+CLS Token 单独处理，不参与空间随机遮挡和重建损失。
+
+对其余400个 Patch Tokens 施加60%随机空间 Mask，与 ConvNeXtV2 分支采用对应的掩码区域。
+
+然后让被遮挡的 Tokens 继续通过后续 ViT Blocks，再由轻量 Token Decoder 重建原来的第6层 Patch Tokens。
+
+参考目标为第6层未遮挡 Token 特征的 `detach()` 副本。
+
+计算：
+
+`L_vit_latent = masked_mse(T6_hat, stopgrad(T6))`
+
+注意 ViT 前6个 Blocks 已经处理了完整 Token 序列，因此同样存在 Mask 前的信息混合。
+
+这属于中间特征掩码重建，不能错误描述成标准的输入级 MAE。
+
+ViT 前6层、后6层都需要通过重建任务实际得到梯度更新。
+
+最终：
+
+`L_H2 = 0.5 * L_cnn_latent + 0.5 * L_vit_latent`
+
+对潜在特征适当进行数值归一化，避免因两个分支特征量纲不同而使其中一个重建目标主导训练。
+
+训练中检查：
+
+- 两个 Encoder 的梯度是否非零；
+- 参数是否确实更新；
+- 特征方差是否异常接近零；
+- 是否发生表示坍缩；
+- Decoder 是否学会简单输出常数；
+- 被遮挡位置的重建误差是否正常下降。
+
+如果出现明显表示坍缩，暂停该组预训练、保留诊断日志并修复问题，不要静默添加 Teacher–Student、对比损失或其他未授权结构。
+
+自监督结束后，只保留两个 Backbone 的更新权重，删除重建 Decoder，进入与 H0/H1 相同的有监督分类微调。
+
+### 三组公平性要求
+
+H1/H2 使用相同官方训练图像、相同自监督训练轮数、相同掩码比例和尽可能匹配的掩码空间位置。
+
+H0/H1/H2 分类阶段完全一致。
+
+不得将 H1/H2 的重建 Loss 与 H0 的分类 Loss 直接比较。
+
+H2 与 H1 的 Decoder、目标数值空间存在必要差异，因此本轮主要检验两种自监督方案的实际分类收益，不能宣称所有训练计算条件严格相同。
+
+---
+
+## 六、GPU Benchmark：正式训练前必须先完成
+
+这是强制性的第一阶段，优先级高于完整训练。
+
+### 6.1 核心要求
+
+当前训练设备预计为 RTX 4060 Laptop 8GB，请先检测实际 GPU 名称、总显存、CUDA 和 BF16 支持情况。
+
+以前 ConvNeXt-Tiny 的默认配置为：
+
+- `image_budget=8`
+- `grad_accumulation=4`
+
+但本轮增加了 ViT 分支，不能继续假设这仍然是最优组合。
+
+此次优化目标是：
+
+**在训练数值稳定、不 OOM、保持可比较的有效 Batch 规模的前提下，最大化真实训练吞吐量 images/s。**
+
+不能单纯以显存占用比例、GPU 利用率或最大 Batch Size 判断效率。
+
+### 6.2 Benchmark 对象
+
+分别对以下训练过程进行 Benchmark：
+
+1. Hybrid 有监督分类训练；
+2. H1 像素重建自监督训练；
+3. H2 潜在特征重建自监督训练。
+
+有监督分类的最优 image_budget/grad_accumulation 尽量在 H0/H1/H2 之间统一。
+
+H1、H2 自监督阶段可以采用各自更高吞吐量的微批量配置，但要保持相同目标有效 Batch 和相同实际样本训练预算。
+
+### 6.3 Batch 候选
+
+根据可用显存，自适应测试：
+
+`image_budget = [1,2,4,6,8,12,16]`
+
+优先维持每次 Optimizer Update 约32张图像的有效训练规模。
+
+例如：
+
+| Image Budget | Grad Accumulation | 目标有效图片数 |
+|---|---:|---:|
+| 2 | 16 | 32 |
+| 4 | 8 | 32 |
+| 8 | 4 | 32 |
+| 16 | 2 | 32 |
+
+这些只是候选，不代表全部必须可运行。
+
+对于 Study 级分类，必须保留完整 Study 的 Logit Mean 语义。不能为了满足 image_budget 而丢弃某些 Study 中的图像；如果采用跨微批次切分，应确保梯度与原始 Study 级 Loss 等价。
+
+由于每个 Study 包含的图像数量不固定，实际有效图片数可能与理论值不同。需要同时记录 Study 数量、图片数量、Optimizer Update 数量。
+
+发现 CUDA OOM 时，应安全清理该候选并继续测试较小配置，不得中断整个搜索任务。
+
+### 6.4 Benchmark 必须是真实训练步骤
+
+每组配置必须包含：
+
+- 数据加载
+- 前向传播
+- Loss 计算
+- 反向传播
+- 梯度累积
+- Optimizer Step
+- 必要的 AMP 操作
+- CUDA 同步计时
+
+不能只测模型 Forward，然后把它当作训练吞吐量。
+
+先预热，再进行足够多的稳定训练迭代，避免第一次 CUDA 初始化、权重加载、编译等开销影响吞吐量判断。
+
+不要将数据缓存到 GPU 后测出的纯计算吞吐量当作真实端到端吞吐量。
+
+至少记录两项：
+
+`GPU computation images/s`
+
+`End-to-end training images/s`
+
+其中实际选型以端到端持续训练吞吐量为主要依据，GPU 纯计算吞吐量用于定位瓶颈。
+
+不改造既有 NAS 数据读取链路，也不因 Benchmark 而引入新的数据源或图像缓存策略。
+
+### 6.5 参数搜索范围
+
+除了 image_budget、grad_accumulation，还允许测试：
+
+- BF16 AMP 是否正常、稳定；
+- pin_memory 的现有配置；
+- 当前 DataLoader num_workers 的合理候选；
+- AdamW fused 实现是否支持；
+- Gradient Checkpointing 是否值得开启。
+
+这些属于工程效率优化，不改变分类模型的数学架构。
+
+对于 Gradient Checkpointing，只有在能够明显提高稳定吞吐量或者避免 OOM 时才启用，不得只凭降低峰值显存就启用。
+
+对所有配置要求相同的训练数值精度口径、有效 Batch 目标和优化器行为。
+
+比较结果需包括：
+
+- images/s（核心指标）
+- 每次 Optimizer Update 耗时
+- 平均 / P50 / P95 步时
+- 实际图片数量
+- Peak allocated / reserved GPU memory
+- 总显存利用比例
+- OOM 或其他异常
+- 是否启用 Checkpointing
+- 有效 Batch 规模
+- 是否存在明显吞吐量抖动
+
+### 6.6 Benchmark 结果输出
+
+生成：
+
+`hybrid_gpu_benchmark.csv`
+
+`hybrid_gpu_benchmark.md`
+
+按照 images/s 排序，并分别为分类训练、H1 自监督、H2 自监督选择最优的可行配置。
+
+如果两个配置的吞吐量差异很小，优先选择显存余量更多、训练更稳定、兼容性更好的方案。
+
+选型后将最佳参数写入对应 YAML 配置文件，正式训练自动读取，不允许重新回到旧版 8/4 默认值。
+
+Benchmark 不参与正式训练结果，结束后重新加载相同的初始权重和随机种子。
+
+---
+
+## 七、自监督阶段的训练参数
+
+H1/H2 预训练轮数暂定为20 Epoch。
+
+预训练阶段采用独立调度：
+
+- Warmup：2 Epoch
+- Cosine：18 Epoch
+- Mask Ratio：0.60
+- Seed：42
+- AdamW
+- BF16 AMP（设备支持时）
+- Gradient Clipping：1.0
+- 关闭 Early Stopping
+- 保存 best 与 last checkpoint
+
+自监督的 Encoder 学习率可以先以 `1e-5` 为起点，Decoder 学习率以 `2e-4` 为起点。
+
+这两项为本轮初始配置，Codex 可在训练前验证数值稳定性，但不得在 H1 与 H2 之间擅自设置不同的 Encoder 学习率、训练轮数或样本预算。
+
+不要额外加入对比学习、KL 蒸馏、Teacher–Student 或其他自监督目标。
+
+H1/H2 应当从相同 ImageNet 权重分别独立初始化，不允许 H2 从 H1 的自监督 checkpoint 继续训练。
+
+自监督仅使用官方 train 图像，不使用十个疾病标签计算任何监督损失。
+
+---
+
+## 八、有监督分类微调配置
+
+H0/H1/H2 分类训练统一：
+
+- Epoch：20
+- Warmup：2 Epoch
+- Cosine Decay：18 Epoch
+- Backbone Peak LR：`1e-5`
+- Head Peak LR：`2e-4`
+- 最低学习率：Backbone `5e-7`，Head `1e-5`
+- Weight Decay：`0.01`
+- Optimizer：AdamW
+- Grad Clip：1.0
+- Seed：42
+- AMP：BF16（支持时）
+- Loss：Standard BCEWithLogitsLoss
+- 无正样本权重
+- 无 ASL
+- Study Fusion：Logit Mean
+- 输入：320×320
+- 分类增强：沿用现有轻微增强
+- 关闭 Early Stopping
+
+两个 Backbone 全量微调，不因增加 ViT 而默认冻结 CNN 或 ViT。
+
+若训练稳定性要求短暂冻结某一分支，必须先说明和记录，且三组采取完全一致的策略；优先不冻结。
+
+每轮都保存 Train Loss、Valid Loss、Macro-AUROC、Macro-F1、Learning Rate、训练时间和 GPU 峰值显存。
+
+保存：
+
+- Best Macro-AUROC checkpoint
+- Last checkpoint
+- 对应配置、优化器和 Scheduler 状态
+- 模型初始化权重标识
+- 完整验证集预测
+
+如果验证 AUROC 在第5–7轮左右再次达到最高，也仍然按计划完成20轮；不要因为观察到过拟合就自动停止。完整曲线用于分析不同预训练方案是否改变了泛化退化的速度。
+
+---
+
+## 九、测试与正确性验证
+
+正式训练之前执行以下检查：
+
+1. ConvNeXtV2 和 ViT 的 ImageNet 权重正确加载。
+2. 相同的320×320图像进入两个分支。
+3. ViT位置编码插值正确。
+4. 双分支特征维度和融合维度正确。
+5. 每张胸片输出10维Logits。
+6. 一个Study多张图像能够正确 Logit Mean。
+7. Standard BCE能够正确反向传播。
+8. H1掩码比例准确为60%。
+9. H2 Stage3与ViT中间层掩码比例准确为60%。
+10. H1/H2两个Encoder都存在有效梯度，且参数真正更新。
+11. 重建Decoder仅存在于自监督阶段。
+12. 自监督完成后的Encoder权重能够完整加载回分类架构。
+13. 所有实验均只读取许可的数据划分。
+14. 每组至少完成一个真实样本的Forward、Backward和Optimizer Step。
+15. 所有模型、Decoder和完整Checkpoint均能够在本地保存并重新加载。
+
+分别检查 Train 和 Validation 预处理图像是否存在裁剪、横纵比变形、灰度范围错误、Patch顺序错乱和位置编码尺寸异常。
+
+---
+
+## 十、正式训练执行顺序
+
+在 Benchmark 和 Smoke Test 全部成功之后，按以下顺序执行：
+
+### 第一步：H0 基线
+
+加载两个 ImageNet Backbone。
+
+直接完成20 Epoch胸片分类微调。
+
+保存全部指标与模型权重。
+
+### 第二步：H1 像素重建
+
+重新加载与H0相同的ImageNet初始权重。
+
+执行20 Epoch像素掩码自监督预训练。
+
+保存预训练 Encoder。
+
+将其载入统一双分支分类网络，再完成20 Epoch有监督微调。
+
+### 第三步：H2 潜在特征重建
+
+重新加载与H0相同的ImageNet初始权重。
+
+执行20 Epoch Stage3与ViT中间Token特征重建。
+
+保存预训练 Encoder。
+
+载入统一双分支分类网络，完成20 Epoch有监督微调。
+
+所有运行必须使用独立实验目录，不覆盖任何历史 ConvNeXt-Tiny、A1/B1/C1 或 DSAP-RPB 结果。
+
+遇到可恢复异常应记录日志、修复并从合法 checkpoint 恢复。不要在缺少成功预训练 checkpoint 的情况下，将随机初始化或未更新权重冒充 H1/H2 预训练成果。
+
+---
+
+## 十一、结果报告与评估
+
+每轮记录：
+
+- Train Loss
+- Valid Loss
+- Study Macro-AUROC
+- Macro-AUPRC
+- Macro-F1
+- 十类 AUROC/AUPRC/F1
+- 各类 TP/FP/TN/FN
+- 各类正负样本数量
+- CNN / ViT / Head 当前学习率
+- GPU images/s
+- 峰值 GPU 显存
+- Epoch 耗时
+- Optimizer Update 数量
+
+H1/H2 自监督阶段额外记录：
+
+- CNN Reconstruction Loss
+- ViT Reconstruction Loss
+- 总 Reconstruction Loss
+- 掩码比例
+- 特征方差及表示坍缩检查
+- CNN/ViT Encoder 梯度统计
+- 预训练 images/s
+
+最终汇总表必须包含：
+
+| 模型 | 自监督方式 | Best Epoch | Macro-AUROC | Pneumonia AUROC | Lung Opacity AUROC | Params | images/s |
+|---|---|---|---|---|---|---|---|
+| H0 | 无额外自监督 | 实测 | 实测 | 实测 | 实测 | 实测 | 实测 |
+| H1 | Pixel Reconstruction | 实测 | 实测 | 实测 | 实测 | 实测 | 实测 |
+| H2 | Latent Reconstruction | 实测 | 实测 | 实测 | 实测 | 实测 | 实测 |
+
+对每组保存相同验证 Study 的逐类概率，采用按 Subject 分组的 Paired Bootstrap 计算 Macro-AUROC 差值95%置信区间。
+
+重点比较：
+
+- H1 − H0：胸片像素掩码重建是否有收益？
+- H2 − H0：胸片潜在特征重建是否有收益？
+- H2 − H1：两种重建目标哪个更适合疾病分类？
+- Pneumonia 和 Lung Opacity 是否有所改善？
+- 是否延缓了过去第5–7轮后验证集性能下降的问题？
+- 新双分支网络在实际 images/s、显存和推理延迟上是否可接受？
+
+保留历史 ConvNeXt-Tiny 的 0.791286 和 0.793451 作为背景参照，但明确说明其旧训练条件与本轮不同，不能当成严格匹配的结构消融。
+
+生成：
+
+- `hybrid_gpu_benchmark.md`
+- `hybrid_h0_report.md`
+- `hybrid_h1_report.md`
+- `hybrid_h2_report.md`
+- `hybrid_h0_h1_h2_comparison.md`
+- Train/Valid Loss 曲线
+- Macro-AUROC 曲线
+- 逐疾病 AUROC 对比图
+- 三组 GPU images/s 和峰值显存对比图
+- H1/H2 掩码与重建可视化
+
+H2 特征重建可通过特征热力图、重建误差分布、PCA 通道投影等方式展示，不得将特征图伪装成直接重建出的医学胸片。
+
+---
+
+## 十二、代码工程要求
+
+尽量复用已有项目中的：
+
+- CSV/Dataset/Study Sampler
+- ResizePad
+- Label Mapping
+- Standard BCE
+- Study Logit Mean
+- AUROC/AUPRC计算
+- Checkpoint管理
+- 训练日志与画图工具
+
+建议拆分为：
+
+- Hybrid Backbone 定义
+- H1 像素重建预训练模块
+- H2 潜在特征重建预训练模块
+- GPU Benchmark 脚本
+- 自监督训练入口
+- 有监督微调入口
+- 三组实验配置
+- 对比分析脚本
+
+不要将所有逻辑堆入一个训练脚本。
+
+不要修改和覆盖历史模型、训练产物和原始数据。
+
+全部代码与配置应可独立复现。
+
+---
+
+## 十三、最终执行要求
+
+现在开始执行，不仅是提供设计方案。
+
+执行顺序必须为：
+
+**环境检查 → 构建双分支模型 → 实现H1/H2 → 单元测试与Smoke Test → GPU Benchmark → 选择最高稳定images/s配置 → H0/H1/H2正式训练 → 结果汇总。**
+
+首先输出 GPU Benchmark 的实测数据和最终 image_budget/grad_accumulation 选择理由，然后正式执行三组实验。
+
+如果训练尚未全部完成，应准确报告目前完成的 Epoch、已有的指标与 checkpoint，不能虚构尚未执行的结果。
+
+本轮核心目标是：在严格保持双分支分类架构一致、官方数据边界一致和下游微调配置一致的前提下，检验像素掩码重建与潜在特征掩码重建对十标签胸片分类的实际贡献。

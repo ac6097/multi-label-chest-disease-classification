@@ -236,3 +236,21 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 cxr_first/
+cxr_first_test/
+/cxr_first/
+/cxr_first.zip
+
+# Trained model weights / packaged inference artifacts (never commit)
+*.pth
+*.PTH
+**/*.pth
+**/*.PTH
+*.safetensors
+*.SAFETENSORS
+**/*.safetensors
+**/*.SAFETENSORS
+*.zip
+*.ZIP
+**/*.zip
+**/*.ZIP
+

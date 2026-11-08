@@ -1,0 +1,330 @@
+# DenseNet-121 下一阶段：低学习率与注意力机制独立消融实验
+
+你是一名熟悉 PyTorch、DenseNet-121、医学影像分类、迁移学习及注意力机制的高级计算机视觉算法工程师。
+
+本次任务只针对 DenseNet-121，不修改 ConvNeXt-Tiny 的代码与实验结果。
+
+我们已完成 DenseNet-121 的标准基线、Weighted BCE、多尺度 GAP、448分辨率及Study融合实验。现在决定进入**从ImageNet预训练权重初始化的注意力机制专项实验**。
+
+当前GPU电脑负责正式训练和验证，数据继续从NAS读取。不要进行数据加载、Batch吞吐量或GPU利用率优化。
+
+## 一、已确定的技术决策
+
+1. Study融合固定为 `logit_mean`。
+2. Loss固定为标准 `BCEWithLogitsLoss`，不使用类别正样本权重。
+3. Backbone固定为torchvision DenseNet-121。
+4. 输入固定为320×320。
+5. 不再开展多尺度GAP实验。
+6. 本轮不采用448分辨率。
+7. 不从此前Epoch 6最优医学分类Checkpoint继续训练。
+8. 所有本轮模型从相同的torchvision ImageNet预训练权重初始化。
+9. 注意力机制分别研究LCA与CBAM，不进行组合实验。
+10. 本轮研究降低学习率能否改善DenseNet-121的泛化与收敛。
+
+原始DenseNet-121已取得官方73.15分，验证Macro-AUROC约0.7888。
+
+原始学习率：
+
+- Backbone：2e-5。
+- Head：2e-4。
+
+过去实验中，原始训练Epoch 6达到最佳，之后训练Loss继续下降，但验证Loss上升、Macro-AUROC下降。
+
+我们的假设是：较低学习率可能更有利于保留ImageNet预训练的通用视觉表征，并平稳学习胸部X光中的细微异常。
+
+注意这只是研究假设，不能预先认定学习率过高是泛化退化的唯一原因。
+
+## 二、首先核验当前注意力模块实现
+
+检查当前DenseNet121源码，确认已实现的：
+
+- Standard GAP分类头。
+- CBAM。
+- LCA（Label Cross-Attention）。
+
+这里LCA特指先前技术路线中的10 Query Label Cross-Attention，不是其他同名注意力方法。
+
+### CBAM
+
+检查其当前实现是否为：
+
+- 在最终Dense Block特征图上接入CBAM。
+- Channel Attention。
+- Spatial Attention。
+- GAP + Linear(1024,10)分类头。
+
+确认CBAM插入前后Tensor维度正确。
+
+### LCA
+
+检查其当前实现是否为：
+
+- 10个可学习疾病Query。
+- DenseNet最后阶段空间特征作为Key/Value来源。
+- d_model=256。
+- Multi-head Cross-Attention。
+- 每个类别输出一个Logit。
+
+检查其Query、Key、Value、输出映射、梯度传播及内存开销。
+
+如果真实代码与以上描述有差异，以代码为准，先报告差异，不擅自修改成新的网络方案。
+
+## 三、实验矩阵
+
+设计以下四组实验。
+
+| ID | 网络结构 | 初始化 | Loss | Backbone LR | Head LR |
+|---|---|---|---|---:|---:|
+| B0 | DenseNet+GAP | ImageNet | Standard BCE | 2e-5 | 2e-4 |
+| B1 | DenseNet+GAP | ImageNet | Standard BCE | 5e-6 | 5e-5 |
+| A1 | DenseNet+LCA | ImageNet | Standard BCE | 5e-6 | 5e-5 |
+| A2 | DenseNet+CBAM | ImageNet | Standard BCE | 5e-6 | 5e-5 |
+
+B0属于已有历史实验，先核验其训练配置和结果，不必无条件重新训练。
+
+B1为降低学习率的全新对照组。
+
+A1和A2分别用于研究LCA、CBAM能否在相同低学习率条件下超过普通GAP。
+
+**B1、A1、A2必须分别从相同ImageNet权重开始训练。**
+
+不得采用：
+
+- B1训练好的权重初始化A1。
+- B1训练好的权重初始化A2。
+- A1权重初始化A2。
+- Epoch 6疾病分类权重初始化任何本轮实验。
+
+同样的ImageNet预训练只用于可对应的Backbone参数；新分类头、CBAM和LCA参数使用受控的随机初始化。
+
+记录所有权重来源与参数加载结果。
+
+## 四、学习率与训练策略
+
+低学习率建议从以下值开始：
+
+- Backbone：5e-6。
+- GAP/LCA/CBAM相关新增可学习模块的初始学习率：5e-5。
+
+但要特别注意：
+
+新分类头并没有经过胸片分类训练。过低的Head LR可能使新头学习缓慢，进而导致Early Stopping过早触发。
+
+因此首先检查：
+
+1. 是否需要短暂冻结Backbone，只训练新增模块。
+2. 新分类头梯度是否正常。
+3. Head LR与Backbone LR比例是否合理。
+4. Warmup是否适用于从ImageNet权重初始化的全新分类任务。
+5. 是否应适当延长训练轮数和Early Stopping patience。
+
+不要直接照搬此前从Epoch 6继续微调时使用的8 Epoch上限。
+
+本轮模型从ImageNet初始化，没有经过胸片任务训练，可能需要更长时间收敛。
+
+建议先设置与原始基线相同的最大40 Epoch预算，结合验证Macro-AUROC和Early Stopping决定实际训练轮数。
+
+可以采用：
+
+- AdamW。
+- Weight Decay=1e-4。
+- Warmup 2 Epoch。
+- Cosine LR Scheduler。
+- Gradient Clip=1.0。
+- Image budget=16。
+- Gradient accumulation=2。
+- BF16 AMP（设备支持时）。
+- Seed=42。
+
+如果需要Head-only Warmup，B1、A1、A2应采用清晰、统一且公平的训练阶段设计。不同注意力模块的新增参数可以合理配置学习率参数组，但必须记录并解释，避免隐藏的额外变量。
+
+## 五、实验执行顺序
+
+### 第一阶段：B1低学习率标准GAP
+
+先训练B1，获得新的低学习率基础对照。
+
+将它与历史B0比较：
+
+- Best Epoch。
+- Train Loss。
+- Validation Loss。
+- Macro-AUROC。
+- 十类AUROC和AUPRC。
+- 收敛速度。
+- 泛化退化开始的Epoch。
+
+判断降低学习率是否：
+
+- 推迟泛化退化。
+- 提高最佳Macro-AUROC。
+- 改善Pneumonia和Lung Opacity。
+- 使Loss下降更平稳。
+- 只是降低收敛速度而未提高最终性能。
+
+如果B1没有超过B0，不能因此直接否定所有注意力实验，但必须分析低学习率是否导致训练不足。
+
+### 第二阶段：A1 LCA实验
+
+保持B1的基础数据、Loss、学习率策略和训练预算，单独启用LCA。
+
+比较B1与A1，重点研究疾病专属注意力是否改善：
+
+- Pneumonia。
+- Lung Opacity。
+- Consolidation。
+- Enlarged Cardiomediastinum。
+
+注意LCA的结构变化较大，新分类头训练可能更加困难，应检查Attention输出是否正常、Query是否出现退化、梯度是否稳定。
+
+不得因注意力可视化图像看起来更集中，就声称模型识别能力更强。
+
+### 第三阶段：A2 CBAM实验
+
+重新从相同ImageNet预训练权重初始化DenseNet-121。
+
+只启用CBAM，不启用LCA。
+
+与B1使用相同训练预算和基础超参数。
+
+检查CBAM的通道及空间注意力是否能够改善关键疾病AUROC。
+
+不要将CBAM与LCA同时启用。
+
+## 六、控制变量要求
+
+三组新训练必须固定：
+
+- Train/Validation数据划分。
+- Study级标签定义。
+- 图像预处理。
+- 输入分辨率。
+- 数据增强。
+- Study融合。
+- Standard BCE。
+- 随机种子。
+- Batch设置。
+- Optimizer与Scheduler设计。
+- 最大训练预算。
+- Checkpoint选择指标。
+
+只允许结构相关的必要参数区别。
+
+如果注意力结构引入不同的Head学习率，必须明确说明，并考虑补充匹配对照，避免混淆注意力收益和优化配置收益。
+
+任何实验都不能使用官方测试集调参。
+
+## 七、模型评估
+
+每轮记录：
+
+- Train Loss。
+- Validation Loss。
+- Study级Macro-AUROC。
+- 十类AUROC。
+- 十类AUPRC。
+- Macro-F1（辅助）。
+- 最佳Epoch。
+- Gradient Norm。
+- 学习率曲线。
+- 推理延迟。
+- 参数量与Checkpoint大小。
+
+重点生成以下对照表：
+
+| 类别 | B0 原始GAP | B1 低LR GAP | A1 LCA | A2 CBAM |
+|---|---:|---:|---:|---:|
+| Enlarged Cardiomediastinum | 0.7512 | 待测 | 待测 | 待测 |
+| Pneumothorax | 0.8299 | 待测 | 待测 | 待测 |
+| Consolidation | 0.7531 | 待测 | 待测 | 待测 |
+| Pneumonia | 0.6921 | 待测 | 待测 | 待测 |
+| Edema | 0.8646 | 待测 | 待测 | 待测 |
+| Cardiomegaly | 0.7845 | 待测 | 待测 | 待测 |
+| Atelectasis | 0.7636 | 待测 | 待测 | 待测 |
+| Lung Opacity | 0.6986 | 待测 | 待测 | 待测 |
+| Pleural Effusion | 0.8909 | 待测 | 待测 | 待测 |
+| No Finding | 0.8593 | 待测 | 待测 | 待测 |
+
+分别比较：
+
+1. B1 − B0：低学习率效果。
+2. A1 − B1：LCA结构效果。
+3. A2 − B1：CBAM结构效果。
+4. A1 − A2：两种注意力机制的相对效果。
+
+使用配对Subject级Bootstrap分析Macro-AUROC差值。
+
+对于验证集阳性数量很少的类别，不要过度解释微小提升。
+
+如果第一轮结果接近，优先对关键对照增加一个随机种子，而不是马上继续堆叠结构。
+
+## 八、Checkpoint管理
+
+原始Epoch 6模型必须保留：
+
+`DenseNet121/checkpoint/best/best_by_macro_auc.pth`
+
+新实验分别保存至：
+
+- `outputs/experiments/dn121_low_lr_gap/`
+- `outputs/experiments/dn121_low_lr_lca/`
+- `outputs/experiments/dn121_low_lr_cbam/`
+
+每组独立保存：
+
+- 最佳Checkpoint。
+- Last Checkpoint。
+- 完整配置。
+- 训练日志。
+- 验证Study预测。
+- 每轮逐类AUROC。
+- Checkpoint SHA-256。
+- Git Commit。
+
+严禁覆盖原始模型。
+
+## 九、输出报告
+
+在 `docs` 下生成：
+
+1. `densenet_low_lr_baseline_results.md`
+2. `densenet_lca_results.md`
+3. `densenet_cbam_results.md`
+4. `densenet_attention_comparison.md`
+5. `densenet_next_stage_decision.md`
+
+报告应包含训练曲线、逐类对照、模型大小、推理代价、统计不确定性及明确结论。
+
+若某项训练失败或未执行，明确标记，不得虚构结果。
+
+## 十、执行与停止条件
+
+请先检查实际源码、ImageNet权重、模型实现及GPU环境。
+
+正式执行：
+
+1. 核验B0历史记录。
+2. 完成B1低学习率GAP基线。
+3. 完成A1 LCA独立实验。
+4. 完成A2 CBAM独立实验。
+5. 比较结果并形成下一阶段决策。
+
+在模型训练前进行必要Smoke Test，确保输出为正确的10维Logits，并且Study级聚合与反向传播正常。
+
+如果某组出现明显数值异常、无法收敛或训练不稳定，先分析工程错误与优化配置，不要自动无限重试。
+
+不要自动增加额外注意力层、448分辨率、多尺度GAP或其他Backbone。
+
+不要提交官方测试集。
+
+本轮完成后必须回答：
+
+- 降低学习率是否真正改善DenseNet-121的Macro-AUROC和泛化？
+- LCA是否超过相同低学习率的普通GAP基线？
+- CBAM是否超过相同低学习率的普通GAP基线？
+- Pneumonia和Lung Opacity是否获得改善？
+- 是否存在部分强类退化导致Macro-AUROC下降？
+- 三组训练中哪一组最稳定？
+- 哪个模型值得进入后续正式官方测试候选？
+
+**最终目标：在标准BCE、Logit Mean和相同ImageNet初始化的条件下，独立验证较低学习率、LCA与CBAM对DenseNet-121多标签胸片分类的作用。**

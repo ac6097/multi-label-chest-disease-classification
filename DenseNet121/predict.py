@@ -14,6 +14,7 @@ from utils.config import PROJECT_DIR, read_yaml, resolve_config_path, resolve_da
 def main():
     parser = argparse.ArgumentParser(description="Write DenseNet-121 Study-level long-format predictions")
     parser.add_argument("--csv", default=None)
+    parser.add_argument("--image-root", default=None, help="Override the image root from configs/data.yaml")
     parser.add_argument("--checkpoint", default=str(PROJECT_DIR / "checkpoint/best/best_by_macro_auc.pth"))
     parser.add_argument("--output", default=str(PROJECT_DIR / "outputs/predictions/test_predictions.csv"))
     args = parser.parse_args()
@@ -26,7 +27,8 @@ def main():
     csv_file = args.csv or data_cfg.get("test_csv")
     if not csv_file:
         raise ValueError("Set test_csv in configs/data.yaml or pass --csv")
-    dataset = StudyDataset(csv_file, data_cfg["image_root"], build_transform(data_cfg["image_size"]),
+    image_root = resolve_config_path(args.image_root) if args.image_root else data_cfg["image_root"]
+    dataset = StudyDataset(csv_file, image_root, build_transform(data_cfg["image_size"]),
         label_column=None, label_semantics="unresolved",
         image_id_column=data_cfg["image_id_column"], subject_column=data_cfg["subject_column"],
         study_column=data_cfg["study_column"])

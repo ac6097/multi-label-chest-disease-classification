@@ -1,0 +1,15 @@
+initial_weights: outputs/hybrid/shared/imagenet_initial.pth
+initial_weights_metadata: outputs/hybrid/shared/imagenet_initial.json
+data_config: configs/hybrid_data.yaml
+model_config: configs/hybrid_model.yaml
+train_config: configs/hybrid_train.yaml
+benchmark_config: configs/hybrid_benchmark.yaml
+h1_pretrain_config: configs/hybrid_h1_pretrain.yaml
+h2_pretrain_config: configs/hybrid_h2_pretrain.yaml
+outputs:
+  benchmark: outputs/hybrid/benchmark
+  h0: outputs/hybrid/h0
+  h1_pretrain: outputs/hybrid/h1_pretrain
+  h1: outputs/hybrid/h1
+  h2_pretrain: outputs/hybrid/h2_pretrain
+  h2: outputs/hybrid/h2

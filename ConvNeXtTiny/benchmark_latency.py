@@ -37,7 +37,7 @@ def main():
         study_column=data_cfg["study_column"])
     checkpoint = resolve_config_path(args.checkpoint)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    state = torch.load(checkpoint, map_location=device, weights_only=False)
+    state = torch.load(checkpoint, map_location="cpu", weights_only=False)
     model_config = dict(state.get("config", {}).get("model_config", read_yaml(
         resolve_config_path(PROJECT_DIR / "configs/model.yaml"))))
     model_config["pretrained"] = False  # The checkpoint already contains the initialized backbone.

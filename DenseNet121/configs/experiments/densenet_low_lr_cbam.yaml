@@ -1,0 +1,30 @@
+seed: 42
+epochs: 40
+image_budget: 16
+grad_accumulation: 2
+learning_rate_backbone: 0.000005
+learning_rate_head: 0.00005
+weight_decay: 0.0001
+warmup_epochs: 2
+patience: 8
+# Match historical B0 and warm the fresh head/CBAM modules before full unfreezing.
+freeze_backbone_epochs: 1
+freeze_batchnorm_stats: false
+gradient_clip_norm: 1.0
+
+loss: bce
+weighting: sqrt
+pos_weight_cap: 5.0
+gamma_pos: 0.0
+gamma_neg: 4.0
+asl_clip: 0.05
+
+amp: true
+amp_dtype: bfloat16
+output_dir: outputs/experiments/dn121_low_lr_cbam
+resume: ""
+source_git_commit: e5f3ea23250d21c13ecaf85815cd504e136483f9
+source_worktree_dirty: true
+pretrained_weight_source: torchvision.models.DenseNet121_Weights.DEFAULT
+pretrained_weight_sha256: A639EC97D7C33B07AE66F0B5FB7D0192F95A3B11B7576C66C0126C2A727C4395
+initialization_policy: ImageNet backbone; fresh GAP and CBAM modules; no checkpoint initialization

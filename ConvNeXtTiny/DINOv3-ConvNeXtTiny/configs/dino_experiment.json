@@ -1,0 +1,86 @@
+{
+  "experiment": "DINOv3_D0_D0C1",
+  "seed": 42,
+  "source": {
+    "huggingface_repo": "facebook/dinov3-convnext-tiny-pretrain-lvd1689m",
+    "revision": "10d30274b4d445111e2d5bf75ac93bbd94db274b",
+    "weights_file": "model.safetensors",
+    "weights_sha256": "bd30a9459d6149564ef53af6e8a1999980953b009b94cde836ac1bac4d339cb2",
+    "meta_repository": "https://github.com/facebookresearch/dinov3",
+    "meta_convnext_file_blob_sha": "6300de5a9af0b673e67ff7ae31258aa06c205080",
+    "input_mean": [0.485, 0.456, 0.406],
+    "input_std": [0.229, 0.224, 0.225]
+  },
+  "data": {
+    "source_config": "../configs/hybrid_data.yaml",
+    "label_semantics": "closed_world",
+    "image_size": 320,
+    "transform": "ResizePad+Grayscale3+BrightnessContrast0.05+Translation0.02+Scale0.97-1.03+ImageNetNormalize",
+    "train_split": "train",
+    "validation_split": "valid",
+    "test_access": false
+  },
+  "model": {
+    "architecture": "DINOv3ConvNextModel",
+    "depths": [3, 3, 9, 3],
+    "dims": [96, 192, 384, 768],
+    "feature_dim": 768,
+    "num_labels": 10,
+    "pooling": "global_average_pool_then_official_layer_norm",
+    "study_fusion": "mean_raw_image_logits_before_sigmoid",
+    "drop_path_rate": 0.0,
+    "layer_scale_init_value": 1e-6
+  },
+  "training": {
+    "epochs": 20,
+    "warmup_epochs": 2,
+    "peak_lr_backbone": 1e-5,
+    "peak_lr_head": 2e-4,
+    "minimum_lr_backbone": 5e-7,
+    "minimum_lr_head": 1e-5,
+    "optimizer": "AdamW",
+    "weight_decay": 0.01,
+    "gradient_clip_norm": 1.0,
+    "mixed_precision": "bfloat16",
+    "early_stopping": false,
+    "loss": "unweighted_study_mean_bce_with_logits",
+    "study_fusion": "raw_logit_mean",
+    "gradient_checkpointing_candidates": [false, true]
+  },
+  "contrastive": {
+    "projection_dims": [768, 256, 128],
+    "temperature": 0.1,
+    "lambda": 0.05,
+    "positive_definition": "different_images_same_study",
+    "negative_definition": "different_study_and_subject_with_fully_known_disjoint_disease_positive_sets"
+  },
+  "benchmark": {
+    "image_budgets": [2, 4, 6, 8, 12, 16, 24, 32],
+    "target_effective_images_per_update": 32,
+    "num_workers": [0, 2, 4],
+    "pin_memory": true,
+    "persistent_workers_when_workers_positive": true,
+    "prefetch_factor": 2,
+    "short_warmup_updates": 2,
+    "short_measured_updates": 5,
+    "finalists": 3,
+    "long_warmup_updates": 5,
+    "long_measured_updates": 20,
+    "long_repeats_per_finalist": 3,
+    "maximum_reserved_memory_fraction": 0.9,
+    "near_max_throughput_fraction": 0.03
+  },
+  "comparison": {
+    "subject_bootstrap_replicates": 2000,
+    "subject_bootstrap_seed": 42,
+    "historical_v1_best_epoch": 6,
+    "historical_v1_macro_auroc": 0.795395,
+    "historical_v1_pneumonia_auroc": 0.726435,
+    "historical_v1_lung_opacity_auroc": 0.715891
+  },
+  "outputs": {
+    "root": "outputs/experiments/DINOv3_D0_D0C1",
+    "export_zip": "submission_export/DINOv3_ConvNeXtTiny_Inference.zip",
+    "submission_size_limit_bytes": 500000000
+  }
+}

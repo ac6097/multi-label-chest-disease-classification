@@ -1,0 +1,12 @@
+image_budget_candidates: [1, 2, 4, 6, 8, 12, 16]
+target_effective_images: 32
+warmup_updates: 5
+measurement_updates: 20
+num_workers: 4
+pin_memory: true
+optimizer_fused: true
+gradient_checkpointing_candidates: [false]
+checkpointing_recheck_top_candidates: 2
+checkpointing_throughput_tolerance: 0.03
+oom_memory_margin: 0.95
+seed: 42

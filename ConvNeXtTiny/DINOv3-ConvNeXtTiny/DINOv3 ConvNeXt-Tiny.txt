@@ -1,0 +1,881 @@
+# Codex 任务：DINOv3 R1/R2/R3/R4 高分辨率、局部疾病特征与 Backbone 容量消融实验
+
+## 一、实验背景与目标
+
+当前项目为胸部 X 光十标签多标签分类，官方主要评测指标为 Study 级 Macro-AUROC。
+
+已有结果：
+
+| 实验 | 网络 | 最佳 Macro-AUROC |
+|---|---|---:|
+| Hybrid H1 | ConvNeXtV2 + ViT + 像素重建预训练 | 0.793342 |
+| V1 | ConvNeXtV2 单分支 + 像素重建预训练 | 0.795395 |
+| D0 | DINOv3 ConvNeXt-Tiny 全量微调 | 0.795868 |
+| D0-C1 | DINOv3 + Study Contrastive | 0.796526 |
+| P0 | DINOv3 冻结全部 Backbone | 0.709145 |
+| P1 | DINOv3 解冻 Stage 4 | 0.766191 |
+| P2 | DINOv3 解冻 Stage 3、4 | 0.794882 |
+
+此前的 ViT 双分支、SPP、Stage 特征拼接、LCA、DSAP-RPB 和 Study Contrastive 都没有带来稳定、明显的突破。
+
+本轮不再进行学习率消融，也不再增加复杂的 Transformer 分支。
+
+**核心目标：研究视觉特征提取能力，而不是继续优化训练集拟合能力。**
+
+重点验证三个问题：
+
+1. 输入320×320是否限制了网络识别细小病理结构？
+2. 仅使用最终Stage的GAP，是否丢失了有用的局部疾病响应？
+3. DINOv3 ConvNeXt-Tiny的特征提取容量是否不足，换用更深的ConvNeXt-Small是否有收益？
+
+所有实验必须遵守：
+
+- 只使用合法通用视觉预训练权重。
+- 不加载医学预训练权重。
+- 不新增外部胸片训练数据。
+- 保持官方Train/Validation/Test边界。
+- 训练前必须优化真实images/s。
+- 使用已有三条件动态早停。
+- 推理模型和全部必要提交文件严格小于500MB。
+
+---
+
+## 二、实验分组
+
+### R0：已有 P2 基线
+
+无需重新训练。
+
+读取已完成的P2：
+
+- Backbone：DINOv3 ConvNeXt-Tiny
+- 输入：320×320
+- 冻结Stage 1、2
+- 训练Stage 3、4及分类头
+- 分类方式：GAP + Linear(10)
+- Best Epoch：5
+- Best Macro-AUROC：0.794882
+
+同时保留D0：
+
+- DINOv3 ConvNeXt-Tiny
+- 全量微调
+- 320×320
+- Best Macro-AUROC：0.795868
+
+R0用于严格程度较高的分辨率对比，D0只作额外历史参照。
+
+### R1：448×448分辨率
+
+保持与P2相同的：
+
+- DINOv3 ConvNeXt-Tiny
+- 原始通用视觉预训练权重
+- 冻结Stage 1、2
+- 解冻Stage 3、4、相应Downsample、最终Norm及Head
+- Standard BCE
+- Study Logit Mean
+- 学习率
+- 数据增强
+- 早停逻辑
+
+唯一主要实验变量：
+
+`image_size = 448`
+
+网络分类结构不变：
+
+`Input → DINOv3 ConvNeXt-Tiny → GAP → Linear(10)`
+
+预期空间特征尺寸：
+
+- Stage 3：28×28
+- Stage 4：14×14
+
+必须通过实际Forward确认。
+
+R1应从原始DINOv3权重独立初始化，不从P2的320×320微调权重续训。
+
+### R2：512×512分辨率
+
+采用与R1相同的网络结构、预训练权重、冻结方式和分类策略。
+
+唯一主要区别：
+
+`image_size = 512`
+
+预期：
+
+- Stage 3：32×32
+- Stage 4：16×16
+
+同样从原始DINOv3权重独立初始化。
+
+不能从R1的best.pth续训，否则会引入额外训练经历。
+
+R1、R2与R0构成分辨率消融：
+
+`320 → 448 → 512`
+
+### R3：全局分类 + 局部疾病响应
+
+待R1和R2完成后，选择具有更好验证表现且计算成本合理的分辨率。
+
+原则上优先选择R1/R2中有正向收益的配置。如果两者都未优于320基线，应先报告高分辨率失败，不直接假设更高分辨率有益；R3可以改用320进行单独结构实验，但必须在报告中说明这一变更。
+
+R3保持DINOv3 ConvNeXt-Tiny，改变的是特征利用方式：
+
+`Stage 4 → GAP → Global Disease Logits`
+
+同时：
+
+`Stage 3 → 1×1 Conv(Channels,10) → Disease Response Maps → Top-K Pooling → Local Disease Logits`
+
+最终融合两个十维Logits。
+
+不采用旧实验已经失败的简单Stage拼接，也不新增ViT、DSAP、LCA、CBAM或其他复杂注意力。
+
+### R4：DINOv3 ConvNeXt-Small
+
+使用官方通用视觉自监督预训练权重：
+
+`facebook/dinov3-convnext-small-pretrain-lvd1689m`
+
+网络：
+
+`ConvNeXt-Small → GAP → Linear(10)`
+
+继续使用Stage 3、4部分解冻策略，冻结早期Stage。
+
+分辨率应选择前面实验中最有根据的候选，并与同分辨率的Tiny GAP实验比较。
+
+R4只改变Backbone容量，不同时新增R3的局部疾病分支。
+
+优先在R1/R2/R3结果完成后实施。如果Small在8GB显存下无法进行合理微调，应记录技术限制，不得以不同任务配置或医学权重替代。
+
+---
+
+## 三、统一数据处理
+
+使用官方训练和验证划分。
+
+沿用已经修复的ResizePad：
+
+1. 读取原始胸片。
+2. 保持原图长宽比。
+3. 等比例缩放。
+4. Padding补齐至目标分辨率。
+5. 灰度转三通道。
+6. 使用DINOv3 LVD-1689M官方对应归一化参数。
+
+禁止直接将原图宽高强行拉伸成正方形。
+
+不得使用隐含224×224中心裁剪的默认预处理覆盖目标分辨率。
+
+R1/R2的图像增强沿用R0：
+
+- Brightness ±5%
+- Contrast ±5%
+- Translation ≤2%
+- Scale 0.97–1.03
+- Rotation 0°
+- 不增加Horizontal Flip
+- 不使用Random Crop
+- 不新增Mixup/CutMix
+- 不新增CLAHE或Gaussian Blur
+
+验证阶段不进行随机增强。
+
+务必检查448和512输入下：
+
+- 图像比例正确；
+- Padding位置正确；
+- 灰度范围正确；
+- Normalize正确；
+- Backbone输出空间尺寸正确；
+- 没有发生隐式Resize或Center Crop。
+
+不同分辨率实验需要使用相同Study ID、标签顺序和官方数据划分。
+
+---
+
+## 四、统一冻结与分类训练策略
+
+R1、R2及R3采用现有P2设置。
+
+冻结：
+
+- Stem
+- Stage 1
+- Stage 2
+- 对应早期Downsample Layers
+
+解冻：
+
+- Stage 3及对应Downsample
+- Stage 4及对应Downsample
+- 最终Norm
+- 分类头
+
+R4使用ConvNeXt-Small对应的相同阶段冻结逻辑。
+
+检查实际模块命名和Stage索引，不得只修改部分参数导致冻结范围错误。
+
+训练前输出参数清单及梯度检查：
+
+- Total Parameters
+- Trainable Parameters
+- Frozen Parameters
+- 每个模块requires_grad状态
+- 每个可训练Stage的实际梯度
+- 冻结模块在Optimizer Step前后是否保持不变
+
+冻结部分保持正确的eval行为。
+
+DINOv3 Backbone必须从指定通用视觉预训练权重加载。
+
+记录来源和SHA-256。
+
+R1/R2/R3不能复用P2、D0等胸片监督微调权重作为初始化。
+
+R4从Small官方权重独立初始化。
+
+---
+
+## 五、统一损失函数与Study融合
+
+使用原有十标签：
+
+`BCEWithLogitsLoss`
+
+不增加：
+
+- Weighted BCE
+- ASL
+- Contrastive Loss
+- Reconstruction Loss
+- Distillation Loss
+- 其他Auxiliary Loss
+
+对于一个Study内的所有图像：
+
+`image_i → logits_i`
+
+然后：
+
+`study_logits = mean(image_logits)`
+
+再计算Study BCE。
+
+验证时：
+
+`study_probability = sigmoid(study_logits)`
+
+不改为Probability Mean或Probability Max。
+
+必须保证高分辨率训练时仍然完整处理每个Study的所有图像。
+
+若显存不足，可采用正确的Study分块与梯度累积机制，但不得因为图片较多便截断Study。
+
+---
+
+## 六、训练前GPU效率优化
+
+这是每一组正式训练前的强制流程。
+
+### 6.1 优化目标
+
+主要指标：
+
+**真实端到端训练 images/s。**
+
+不是最大显存占用率，也不是单纯的Forward images/s。
+
+辅助指标：
+
+- GPU计算images/s
+- Study/s
+- 每次Optimizer Update耗时
+- Peak Allocated/Reserved VRAM
+- 数据加载等待时间
+- Forward耗时
+- Backward耗时
+- Optimizer耗时
+- P50/P95 Step Time
+
+### 6.2 必须针对不同分辨率重新Benchmark
+
+448和512会改变显存占用和卷积计算量，因此不能沿用320的最佳Image Budget。
+
+对每组测试：
+
+`image_budget = [1,2,4,6,8,12,16,24,32]`
+
+根据实际显存自动过滤。
+
+寻找合适的：
+
+`grad_accumulation`
+
+优先保持与P2相同的目标有效Batch规模和Study级Loss计算语义。
+
+如果输入512导致Image Budget必须大幅减小，应通过梯度累积维持合理的有效Batch。
+
+但是，不能简单假设`images_per_microbatch × grad_accumulation`就与原先的Study级训练完全等价。
+
+必须验证实际Study数量、Loss归一化以及Optimizer Update次数。
+
+### 6.3 额外效率参数
+
+允许测试：
+
+- num_workers
+- pin_memory
+- persistent_workers
+- prefetch_factor
+- BF16 AMP
+- fused AdamW
+- channels_last
+- Gradient Checkpointing
+
+尤其要比较开启/关闭Gradient Checkpointing的实际影响。
+
+在显存允许时，关闭Checkpointing可能更快；只有实测后才能决定。
+
+不同实验可选择不同的物理Image Budget，但应尽可能保持相同的有效优化Batch语义。
+
+### 6.4 重点排查旧实验的Benchmark偏差
+
+此前D0的Benchmark约47 images/s，但正式训练只有约23.5 images/s。
+
+P0/P1/P2也出现类似现象。
+
+本轮必须解决或解释这个问题。
+
+要求先审计：
+
+- Benchmark是否包含NAS读取？
+- 是否包含实际图像解码？
+- 是否包含ResizePad与随机增强？
+- 是否使用真实Study分布？
+- 是否包括Backward和Optimizer Step？
+- 是否在CUDA同步之后计时？
+- 是否存在Benchmark期间的数据缓存？
+- 是否在正式训练阶段发生额外同步？
+- 是否存在Study级Python循环开销？
+- DataLoader是否产生明显等待？
+- GPU实际计算是否饱和？
+
+不得继续把仅持续几十步的理想计算吞吐量称作完整训练速度。
+
+采用两阶段Benchmark：
+
+**短测：** 快速排除OOM与明显低效配置。
+
+**长测：** 对前几个候选执行足够长的真实数据流测试，覆盖具有代表性的单图和多图Study，重复测量。
+
+建议对最终选定配置执行一次完整Epoch级别的端到端验证，以确认预测吞吐量与真实训练接近。该验证不计入正式训练，并在之后重新加载初始权重。
+
+不要因Benchmark而擅自改变官方数据或原始NAS目录。
+
+输出每组：
+
+- `gpu_benchmark.csv`
+- `gpu_benchmark.md`
+- `selected_runtime_config.json`
+
+必须报告为什么选择该Image Budget与Gradient Accumulation。
+
+---
+
+## 七、统一学习率和训练设置
+
+本轮不开展学习率搜索。
+
+沿用P2的主要配置：
+
+| 参数 | 值 |
+|---|---|
+| Optimizer | AdamW |
+| Trainable Backbone LR | 1e-5 |
+| Head LR | 2e-4 |
+| Weight Decay | 0.01 |
+| Warmup | 2 Epoch |
+| Cosine | 后续18 Epoch |
+| Gradient Clip | 1.0 |
+| AMP | BF16（支持时） |
+| Seed | 42 |
+| Main Loss | Standard BCE |
+| Study Fusion | Logit Mean |
+| 安全最大轮数 | 20 |
+
+R3额外局部分类分支使用与分类Head相同的初始学习率。
+
+R4采用同样的初始学习率策略，以减少额外实验变量。
+
+注意：不同分辨率和Backbone的最佳学习率不一定相同，但本轮首先保持固定，以便研究特征能力而非优化器差异。
+
+不得根据观察到的某一组验证集结果，悄悄更改其他组的训练参数。
+
+---
+
+## 八、三条件动态早停
+
+保留用户已经确认的早停逻辑。
+
+设当前Epoch为t。
+
+### 条件1：Train Loss连续下降三次
+
+`train[t-3] > train[t-2] > train[t-1] > train[t]`
+
+### 条件2：Validation Loss连续上升三次
+
+`valid[t-3] < valid[t-2] < valid[t-1] < valid[t]`
+
+### 条件3：Macro-AUROC连续三轮无改善
+
+维护历史最高Macro-AUROC。
+
+当当前AUROC严格超过历史最高值时：
+
+- 保存best
+- 更新best_macro_auroc
+- no_improve_count归零
+
+否则计数增加。
+
+达到：
+
+`no_improve_count >= 3`
+
+则满足第三条件。
+
+### 最终逻辑
+
+三个条件必须同时成立：
+
+`should_stop = train_down_3 and valid_up_3 and auc_no_improve_3`
+
+不设置额外的人为AUROC改善阈值。
+
+触发后：
+
+1. 保存当前训练日志。
+2. 保存Last Checkpoint。
+3. 保留历史Best Checkpoint。
+4. 标记停止轮次和具体原因。
+5. 释放GPU资源。
+6. 自动进入下一组。
+
+20 Epoch只是安全上限，不是强制训练目标。
+
+最终始终以Best Macro-AUROC Checkpoint进行评价。
+
+---
+
+## 九、R3局部疾病响应模块的具体实现
+
+这是本轮唯一新增的分类结构，需要严格控制复杂度。
+
+### 9.1 全局分支
+
+与R1/R2完全一致：
+
+`F4 → GAP → Linear(768,10)`
+
+得到：
+
+`z_global ∈ R^10`
+
+### 9.2 局部分支
+
+提取Stage 3输出：
+
+`F3 ∈ R^(B,C,H,W)`
+
+根据实际模型确认C。
+
+使用：
+
+`Conv2d(C,10,kernel_size=1)`
+
+生成十个疾病响应图：
+
+`M ∈ R^(B,10,H,W)`
+
+十个通道分别表示十个标签的空间响应。
+
+不使用病灶检测标签或分割标注。
+
+### 9.3 Top-K局部池化
+
+对于每一个疾病的响应图：
+
+- 展平有效空间位置；
+- 选择响应最高的Top-K；
+- 对这些响应取均值；
+- 得到该疾病的局部Logit。
+
+第一轮固定：
+
+`topk_ratio = 0.10`
+
+K依据当前分辨率下有效位置数计算。
+
+注意：
+
+由于图像使用ResizePad，局部响应图中的Padding区域可能不包含有效解剖信息。
+
+必须提供与ResizePad对应的有效区域Mask，并合理映射到Stage 3空间尺度，避免Top-K优先选中Padding边界或背景填充位置。
+
+验证不同分辨率下有效区域和K的计算正确。
+
+Top-K池化可以保持梯度传播，但需要检查梯度是否只流向选中的位置以及是否出现局部响应被背景伪相关主导的现象。
+
+### 9.4 全局与局部融合
+
+初始采用：
+
+`z_final = (1-alpha)*z_global + alpha*z_local`
+
+初始：
+
+`alpha = 0.05`
+
+alpha可以设置为受约束的可训练标量，但第一轮不引入每个疾病独立的复杂门控网络。
+
+全局分支占主导，局部响应作为较小的补充。
+
+必须检查alpha参数确实具有梯度，且不会超出合理范围。
+
+R3只使用Standard BCE。
+
+### 9.5 R3公平对照
+
+R3与选定的GAP基线使用：
+
+- 相同Backbone
+- 相同DINOv3初始化
+- 相同分辨率
+- 相同训练数据
+- 相同增强
+- 相同冻结范围
+- 相同学习率和早停逻辑
+- 相同Seed
+
+R3从原始通用预训练权重开始，不从最佳R1/R2监督权重续训。
+
+为了尽可能消除初始化差异，全局分类头采用与匹配基线一致的随机初始化。
+
+唯一计划中的架构差异是轻量级局部疾病响应分支及其融合。
+
+必须记录额外参数量、推理耗时及显存。
+
+若R3没有改善，不再叠加其他注意力机制，也不继续更复杂的Top-K超参数搜索。
+
+---
+
+## 十、R4 ConvNeXt-Small实验
+
+使用：
+
+`facebook/dinov3-convnext-small-pretrain-lvd1689m`
+
+该权重来自Meta通用视觉自监督预训练体系，不是胸片专用模型。
+
+采用官方模型结构，不能直接将Tiny权重加载到Small。
+
+结构：
+
+`ConvNeXt-Small → GAP → Linear(10)`
+
+保留：
+
+- Stage 1/2冻结
+- Stage 3/4微调
+- Study Logit Mean
+- Standard BCE
+- 原有增强
+- 三条件早停
+
+按照Tiny实验的结果选择一个已有匹配基线的输入分辨率。
+
+优先选择效果和计算效率综合较合理的分辨率，而非无条件512。
+
+Small正式训练前必须重新进行GPU Benchmark。
+
+在8GB显存环境下，检查：
+
+- 模型能否完整加载；
+- Forward/Backward是否成功；
+- 可训练Stage是否有梯度；
+- OOM与峰值显存；
+- Checkpointing开关；
+- 可持续images/s。
+
+若无法进行可复现、合理有效Batch的训练，应记录限制并停止该组，而不是随意降低输入分辨率后仍将其标记为原计划的严格对照。
+
+最后比较：
+
+`Tiny GAP vs Small GAP`
+
+不在R4同时引入R3局部分支。
+
+---
+
+## 十一、训练顺序与决策逻辑
+
+严格执行：
+
+### 第一阶段：R1
+
+1. 验证原始DINOv3权重。
+2. 构建448输入单分支网络。
+3. 验证冻结范围与Study Loss。
+4. 执行GPU Benchmark。
+5. 重新初始化权重。
+6. 正式训练。
+7. 达到早停条件或安全上限后停止。
+8. 保存Best及结果。
+
+### 第二阶段：R2
+
+采用512输入。
+
+独立初始化。
+
+重复相同的正确性检查、Benchmark和正式训练步骤。
+
+### 第三阶段：分析分辨率收益
+
+比较R0/R1/R2。
+
+重点回答：
+
+- 448是否优于320？
+- 512是否进一步优于448？
+- Pneumonia、Lung Opacity、Pneumothorax有无改善？
+- 更高分辨率是否改变最佳Epoch？
+- 新增计算成本是否合理？
+- 是否出现更强的训练集过拟合？
+
+使用相同验证Study进行配对Bootstrap。
+
+如果448或512具有值得继续检验的正向结果，则优先用其进行R3。
+
+如果都不改善，可以将R3调整为320的纯分类头结构消融，或者暂停R3并说明理由。不得自动声称高分辨率路线已经有效。
+
+### 第四阶段：R3
+
+使用确定的目标分辨率，运行GAP+局部疾病响应实验。
+
+与对应GAP基线比较。
+
+### 第五阶段：R4
+
+运行Small单分支GAP容量实验。
+
+若硬件及提交约束允许，完成与同分辨率Tiny的对照。
+
+### 第六阶段：汇总分析
+
+比较所有实验与D0/P2的关系，选择下一轮基础网络。
+
+---
+
+## 十二、评价指标
+
+所有实验每轮记录：
+
+- Epoch
+- Train BCE
+- Validation BCE
+- Study Macro-AUROC
+- Study Macro-AUPRC
+- Macro-F1
+- 十类AUROC
+- 十类AUPRC
+- Backbone LR
+- Head LR
+- 实际images/s
+- Study/s
+- Epoch耗时
+- Peak GPU Memory
+- Optimizer Update数量
+- Best AUROC
+- Early Stop各条件状态
+
+重点疾病：
+
+- Pneumonia
+- Lung Opacity
+- Pneumothorax
+- Consolidation
+- Cardiomegaly
+- Pleural Effusion
+
+最终结果表：
+
+| 实验 | Backbone | 分辨率 | 分类头 | Best AUROC | images/s | Params | Stop Epoch |
+|---|---|---|---|---|---|---|---|
+| R0 | Tiny | 320 | GAP | 0.794882 | 历史实测 | 实测 | 8 |
+| R1 | Tiny | 448 | GAP | 实测 | 实测 | 实测 | 实测 |
+| R2 | Tiny | 512 | GAP | 实测 | 实测 | 实测 | 实测 |
+| R3 | Tiny | 选定 | GAP+Local | 实测 | 实测 | 实测 | 实测 |
+| R4 | Small | 选定 | GAP | 实测 | 实测 | 实测 | 实测 |
+
+统计比较：
+
+- R1 − R0
+- R2 − R0
+- R2 − R1
+- R3 − 同分辨率GAP基线
+- R4 − 同分辨率Tiny GAP基线
+
+采用相同验证Study的Subject-cluster Paired Bootstrap，至少2000次重采样，报告95%置信区间。
+
+如果某项实验差值极小、置信区间跨0，不得宣称新结构确定优于旧结构。
+
+如果选择R3分辨率、选择最佳Epoch均基于同一验证集，必须说明存在多重模型选择带来的乐观偏差。
+
+本轮不访问Test以反复调参。
+
+---
+
+## 十三、模型可视化与解释
+
+R3需要保存少量局部疾病响应可视化，重点选择：
+
+- Pneumonia
+- Lung Opacity
+- Pneumothorax
+- Consolidation
+
+将Stage 3响应图映射到原始胸片显示区域，避免Padding错位。
+
+可视化应包括：
+
+- 原始输入胸片
+- 每个疾病的响应热力图
+- Top-K选取区域
+- Global Logit
+- Local Logit
+- Fused Logit
+- 对应真实Study标签
+
+热力图仅用于分析模型关注区域，不得把它当作经过病灶框标注验证的医学定位结果。
+
+如果发现模型主要响应文字标记、Padding边界、设备或无关背景，应在报告中指出潜在伪相关风险。
+
+不要为了让可视化更好看而修改模型权重或后处理结果。
+
+---
+
+## 十四、500MB提交约束
+
+最终模型及全部必要文件必须严格小于：
+
+`500,000,000 bytes`
+
+需要实际测量：
+
+- Backbone权重
+- 分类头权重
+- R3额外局部响应参数
+- 推理脚本
+- 标签映射
+- 配置文件
+- 其他必要资源
+
+不得把Optimizer、Scheduler、训练日志、自监督Decoder或无关Checkpoint放入提交包。
+
+每组分别生成独立推理权重。
+
+优先尝试FP32推理权重；如果需要FP16，必须重新验证预测一致性、Macro-AUROC和运行兼容性。
+
+Tiny与Small应分别记录：
+
+- FP32模型大小
+- 完整推理包大小
+- 推理延迟
+- 推理峰值显存
+
+最终必须验证实际推理入口可以正确执行Study Logit Mean。
+
+---
+
+## 十五、输出文件
+
+建议创建：
+
+`outputs/experiments/DINOv3_Feature_Optimization/`
+
+分实验目录：
+
+- `R1_448_GAP/`
+- `R2_512_GAP/`
+- `R3_Global_Local/`
+- `R4_ConvNeXt_Small/`
+
+每组至少保存：
+
+- `config.json`
+- `model_verification.md`
+- `gpu_benchmark.csv`
+- `gpu_benchmark.md`
+- `selected_runtime_config.json`
+- `train_log.csv`
+- `best.pth`
+- `last.pth`
+- `val_best.csv`
+- `per_class_metrics.csv`
+- `training_report.md`
+- `train_valid_loss.png`
+- `macro_auroc_curve.png`
+
+整体报告：
+
+- `resolution_ablation.md`
+- `r3_global_local_analysis.md`
+- `tiny_vs_small_analysis.md`
+- `gpu_throughput_analysis.md`
+- `paired_subject_bootstrap.json`
+- `feature_optimization_final_comparison.md`
+- `submission_size_report.md`
+
+应重点输出每组的实际images/s和GPU瓶颈分析。
+
+不要只呈现Benchmark短测速度。
+
+---
+
+## 十六、最终执行要求
+
+现在开始实际编写代码并执行实验，而不是只输出方案。
+
+严格按照：
+
+**代码审计 → R1 GPU Benchmark → R1训练 → R2 GPU Benchmark → R2训练 → 分辨率分析 → R3局部疾病响应实验 → R4更深Backbone实验 → 综合比较。**
+
+每组都必须独立加载合法的原始通用视觉预训练权重，严格控制实验变量。
+
+不需要为了凑满20轮而继续训练。
+
+三个早停条件同时满足就停止该组，保留最佳Checkpoint并进入下一项。
+
+除分辨率、R3局部响应或R4 Backbone容量等明确指定变量外，不擅自修改Loss、优化器、学习率、数据增强、Study融合策略或训练数据。
+
+如果某组遇到显存、权重访问或实现限制，报告实际障碍并保留已经完成的结果，不伪造后续结果。
+
+最终回答：
+
+1. 提升到448或512是否能够超过0.80？
+2. 更高空间分辨率是否改善了弱类别？
+3. 轻量局部疾病响应是否优于普通GAP？
+4. ConvNeXt-Small是否比Tiny有足够明显的收益？
+5. 最优参数量、训练速度和精度如何权衡？
+6. 高分辨率的实际GPU计算瓶颈是什么？
+7. 哪一个模型最适合最终在小于500MB限制内提交？
+
+本轮研究应围绕**视觉特征的细粒度表达和有效利用**展开，不再通过堆叠复杂网络模块或重复搜索学习率来尝试提高成绩。

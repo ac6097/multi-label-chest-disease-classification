@@ -1,0 +1,8 @@
+name: convnext_tiny
+num_labels: 10
+pretrained: true
+head: spatial
+feature_mode: stage4
+pooling_mode: gap
+cbam: false
+study_fusion: logit_mean

@@ -1,0 +1,53 @@
+{
+  "experiment": "DINOv3_P0_P1_P2",
+  "outputs_root": "outputs/experiments/DINOv3_P0_P1_P2",
+  "profiles": ["p0", "p1", "p2"],
+  "training": {
+    "max_epochs": 20,
+    "warmup_epochs": 2,
+    "seed": 42,
+    "peak_lr_backbone": 0.00001,
+    "peak_lr_head": 0.0002,
+    "minimum_lr_backbone": 0.0000005,
+    "minimum_lr_head": 0.00001,
+    "optimizer": "AdamW",
+    "weight_decay": 0.01,
+    "gradient_clip_norm": 1.0,
+    "mixed_precision": "bfloat16",
+    "fused_adamw": true
+  },
+  "benchmark": {
+    "image_budgets": [2, 4, 8, 12, 16, 24, 32, 48, 64],
+    "target_effective_images_per_update": 32,
+    "effective_images_tolerance": 0.15,
+    "num_workers": [0, 2, 4],
+    "pin_memory": true,
+    "persistent_workers_when_positive": true,
+    "prefetch_factor": 2,
+    "channels_last": [false, true],
+    "p0_gradient_checkpointing": [false],
+    "partial_gradient_checkpointing": [false, true],
+    "short_warmup_updates": 2,
+    "short_measured_updates": 5,
+    "finalists": 3,
+    "long_warmup_updates": 5,
+    "long_measured_updates": 20,
+    "long_repeats_per_finalist": 3,
+    "maximum_reserved_memory_fraction": 0.9
+  },
+  "early_stopping": {
+    "strict_train_loss_decreases": 3,
+    "strict_valid_loss_increases": 3,
+    "macro_auroc_no_improvement_epochs": 3,
+    "comparison_epsilon": 0.0
+  },
+  "comparison": {
+    "subject_bootstrap_replicates": 2000,
+    "subject_bootstrap_seed": 42,
+    "expected_validation_studies": 859
+  },
+  "submission": {
+    "size_limit_bytes": 500000000,
+    "selected_model": "highest_validation_macro_auroc_among_p0_p1_p2"
+  }
+}
