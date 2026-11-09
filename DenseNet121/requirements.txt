@@ -1,7 +1,7 @@
 # Official PyTorch CUDA 12.8 wheels for NVIDIA GPU training.
 --index-url https://download.pytorch.org/whl/cu128
 --extra-index-url https://pypi.org/simple
-torch==2.10.0+cu128
+torch==2.13.0
 torchvision==0.25.0+cu128
 numpy>=1.24
 pandas>=2.0
